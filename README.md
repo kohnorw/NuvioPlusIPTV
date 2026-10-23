@@ -2,7 +2,7 @@
 
 # Nuvio + IPTV
 
-**Everything in Nuvio, plus everything IPTV: a TiviMate-style Live TV guide, catch-up, recordings, and your provider's movies and series, all in one app for Google TV, Android TV and Fire TV.**
+**Everything in Nuvio, plus everything IPTV: a TiviMate-style Live TV guide, catch-up, and your provider's movies and series, all in one app for Google TV, Android TV and Fire TV.**
 
 [![Latest release](https://img.shields.io/github/v/release/homelessbrian/NuvioPlusIPTV?include_prereleases&label=latest&style=for-the-badge)](https://github.com/homelessbrian/NuvioPlusIPTV/releases)
 [![Downloads](https://img.shields.io/github/downloads/homelessbrian/NuvioPlusIPTV/total?style=for-the-badge)](https://github.com/homelessbrian/NuvioPlusIPTV/releases)
@@ -61,14 +61,6 @@ and every 15 minutes. Turn it off under **Settings → Live TV → Nuvio Bridge*
   - **Guide time shift** and **Catch-up time shift** for providers that are off by an hour or more.
 - **Channel name editor** (like TiviMate): strip "USA:", "HD", "24/7" and similar from channel names.
 
-### ⏺️ Recordings
-- **Record a show, or a whole series,** from the guide. Shows on catch-up channels are saved from catch-up after they end, which is the most reliable way.
-- **Save to this device or a USB drive.** Choose what happens when space runs low: stop recording, or delete the oldest.
-- **Choose the padding:** how early recordings start and how long they keep going after the show.
-- **Recordings carry on with the app closed or the box in standby**, and catch-up saves wait for the connection to come back.
-- **Watch while it records,** with skipping back and forward.
-- **Size and details** for every recording: channel, air time, length, size and where it's saved.
-
 ### 🗂️ Channel management
 - **Manage visibility** and **reorder** for channels *and* groups.
 - **Copy, rename and renumber** channels, **create your own groups,** and **number channels 1, 2, 3…** in each group.
@@ -98,7 +90,7 @@ and every 15 minutes. Turn it off under **Settings → Live TV → Nuvio Bridge*
 - **PIN locks:** a PIN that locks any group or category. Adult content locks automatically.
 
 ### 🔎 Part of Nuvio, not bolted on
-- **In the side menu:** Live TV, On Demand and Recordings sit in Nuvio's side menu, with their settings inside Nuvio's own Settings.
+- **In the side menu:** Live TV and On Demand sit in Nuvio's side menu, with their settings inside Nuvio's own Settings.
 - **Start page:** open the app on Home, Live TV, On Demand and more.
 - **Home screen row:** your favorite channels and what's on now, next to Continue watching.
 - **Live TV in Nuvio search:**
@@ -147,7 +139,6 @@ Requires **Android 7.0 or newer** (Fire OS 6 or later). It installs **alongside*
 5. Optional, all in **Settings → Live TV**:
    - set a **Start page**
    - turn on the **home screen row**
-   - choose where recordings are saved under **Recordings**
    - set a parental **PIN**
    - turn on **Google Drive sync**
 6. In **Sports**, press **✎ Follow Teams & Leagues** to pick your teams. Set your region and reminders under **Settings → Sports**.
@@ -156,7 +147,7 @@ Requires **Android 7.0 or newer** (Fire OS 6 or later). It installs **alongside*
 
 ## 🎮 Remote controls
 
-Every button for the guide, full screen, Sports, On Demand and Recordings: see **[CONTROLS.md](CONTROLS.md)**.
+Every button for the guide, full screen and On Demand: see **[CONTROLS.md](CONTROLS.md)**.
 
 ---
 
@@ -232,18 +223,6 @@ Run **Update now** on that playlist once, so the app learns your provider's time
 <summary><b>A channel looks stretched or squashed.</b></summary>
 
 Long-press OK while it's playing and choose **Picture shape**. Try **Use real size**; the app remembers it for that channel. **Screen size** in the same menu changes how the picture fills the screen on every channel.
-</details>
-
-<details>
-<summary><b>My USB drive doesn't show up for recordings.</b></summary>
-
-Open **Save Recordings To** under **Settings → Live TV → Recordings**. Drives the app can't use are listed with the reason, usually that the drive is formatted as NTFS (read-only on most TV boxes) or isn't set up as storage yet. **Drive Not Listed?** in the same list explains what to do.
-</details>
-
-<details>
-<summary><b>Will recordings work if I close the app or turn the TV off?</b></summary>
-
-Yes, as long as the box is in standby and not fully powered off or unplugged. Shows on catch-up channels are saved from catch-up after they end, and they're retried when the connection comes back.
 </details>
 
 <details>

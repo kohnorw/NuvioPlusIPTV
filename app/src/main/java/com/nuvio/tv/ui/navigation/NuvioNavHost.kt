@@ -1389,28 +1389,6 @@ private fun PlaybackNavHost(
             )
         }
 
-        composable(Screen.Recordings.route) {
-            // Live TV fork: recorded shows, played in Nuvio's own player.
-            com.nuvio.tv.livetv.record.RecordingsScreen(
-                onPlay = { url, title, poster, recordingId, fromStart ->
-                    navController.navigate(
-                        Screen.Player.createRoute(
-                            streamUrl = url,
-                            title = title,
-                            // Its own kind, so the player keeps its place for next time but leaves
-                            // it out of Continue Watching, watch history and Trakt.
-                            contentId = com.nuvio.tv.livetv.record.RecordingResume.contentIdFor(recordingId),
-                            contentType = com.nuvio.tv.livetv.record.RecordingResume.CONTENT_TYPE,
-                            contentName = title,
-                            poster = poster,
-                            startFromBeginning = fromStart,
-                            addonName = "Recordings"
-                        )
-                    )
-                }
-            )
-        }
-
         composable(Screen.OnDemand.route) {
             // Live TV fork: On Demand in Nuvio's own home layout (Classic, Grid or Modern, as set
             // for Home), with every layout option taken from Home itself.

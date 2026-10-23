@@ -22,7 +22,6 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.filled.PlayCircleFilled
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.automirrored.filled.Help
@@ -889,7 +888,7 @@ fun LiveTvSettingsContent(
                         val lengths = if (onDrive) listOf(10, 15, 30, 60, 120, 240) else listOf(10, 15, 30, 60, 120)
                         SettingsActionRow(
                             title = "Keep Up To",
-                            subtitle = "How far back you can go. Saved to the drive set in Recordings, and deleted when you change channel or leave Live TV.",
+                            subtitle = "How far back you can go. Saved on this device, and deleted when you change channel or leave Live TV.",
                             value = "${s.timeshiftMinutes} min · about " + (s.timeshiftMinutes * 35).let { mb -> if (mb >= 1000) String.format(java.util.Locale.US, "%.1f GB", mb / 1024f) else "$mb MB" },
                             onClick = {
                                 update { st ->
@@ -1222,95 +1221,6 @@ fun LiveTvSettingsContent(
                         "Set from a show's info in the guide. You get a message a minute before it starts.",
                         "${user.reminders.size}",
                         onClick = { dialog = LiveDialog.Reminders }
-                    )
-                }
-            }
-
-            // ------------------------------------------------------------ Recordings
-            item(key = "recordings") {
-                val recContext = androidx.compose.ui.platform.LocalContext.current
-                // Drives come and go: read again whenever the section is opened.
-                val drives = remember("recordings" in open) { com.nuvio.tv.livetv.record.RecordingStorage.choices(recContext) }
-                val driveProblems = remember("recordings" in open) { com.nuvio.tv.livetv.record.RecordingStorage.problems(recContext) }
-                val chosen = drives.firstOrNull { it.id == s.recordingStorage }
-                fun driveLabel(c: com.nuvio.tv.livetv.record.RecordingStorage.Choice) =
-                    c.label + " · " + com.nuvio.tv.livetv.record.RecordingStorage.sizeLabel(c.freeBytes) + " free"
-                var pickingDrive by remember { mutableStateOf(false) }
-                LiveSection(
-                    title = "Recordings",
-                    summary = "Saved to " + (chosen?.label ?: if (s.recordingStorage.isEmpty()) "This Device" else "a drive that isn't plugged in"),
-                    icon = Icons.Default.FiberManualRecord,
-                    open = "recordings" in open,
-                    onToggle = { toggle("recordings") }
-                ) {
-                    SettingsToggleRow(
-                        "Show Recordings in the Side Menu",
-                        "Once anything is recorded or set to record",
-                        s.recordingsInSidebar,
-                        { update { it.copy(recordingsInSidebar = !it.recordingsInSidebar) } }
-                    )
-                    SettingsActionRow(
-                        title = "Save Recordings To",
-                        subtitle = if (chosen == null && s.recordingStorage.isNotEmpty())
-                            "The chosen drive isn't plugged in: recordings go to this device until it's back"
-                        else "Where new recordings go. Ones already recorded stay where they are.",
-                        value = chosen?.label ?: "This Device",
-                        onClick = { pickingDrive = true }
-                    )
-                    SettingsActionRow(
-                        title = "Start Recording Early",
-                        subtitle = "Starts this long before the show, in case it begins early. Shows already set keep their times.",
-                        value = padLabel(s.recordPreMinutes),
-                        onClick = { dialog = LiveDialog.RecordPre }
-                    )
-                    SettingsActionRow(
-                        title = "Keep Recording After",
-                        subtitle = "Keeps going this long after the show, in case it runs over. Shows already set keep their times.",
-                        value = padLabel(s.recordPostMinutes),
-                        onClick = { dialog = LiveDialog.RecordPost }
-                    )
-                    SettingsActionRow(
-                        title = "When Storage Runs Low",
-                        subtitle = if (s.recordingSpaceRule == "DELETE_OLDEST") "The oldest recordings on that drive are deleted to make room"
-                        else "Recording stops (nothing is deleted)",
-                        value = if (s.recordingSpaceRule == "DELETE_OLDEST") "Delete Oldest" else "Stop Recording",
-                        onClick = {
-                            if (s.recordingSpaceRule == "DELETE_OLDEST") update { it.copy(recordingSpaceRule = "STOP") }
-                            else confirm(
-                                "Delete Old Recordings?",
-                                "When space runs low, the oldest recordings on that drive will be deleted to make room for new ones.",
-                                "Turn On"
-                            ) { update { it.copy(recordingSpaceRule = "DELETE_OLDEST") } }
-                        }
-                    )
-                    if (pickingDrive) ActionListDialog(
-                        title = "Save Recordings To",
-                        actions = drives.map { c ->
-                            (driveLabel(c) + if (c.id == (chosen?.id ?: "")) "  ✓" else "") to {
-                                pickingDrive = false
-                                update { it.copy(recordingStorage = c.id) }
-                            }
-                        } + driveProblems.map { p ->
-                            // Plugged in but not usable: say why instead of leaving it out.
-                            "${p.label} · Can't be used" to {
-                                pickingDrive = false
-                                confirm("${p.label} Can't Be Used", p.reason, "OK") { }
-                            }
-                        } + listOf(
-                            "Drive Not Listed?" to {
-                                pickingDrive = false
-                                confirm(
-                                    "Drive Not Listed?",
-                                    "Android itself hasn't found the drive. Check that the box shows it in its own settings (Storage). " +
-                                        "Large drives often need more power than a TV box's USB port gives: use a drive with its own " +
-                                        "power supply or a powered USB hub. The drive should be formatted as exFAT (NTFS is read only " +
-                                        "on many boxes, and FAT32 can't hold files over 4 GB). Don't set it up as \"device storage\": " +
-                                        "use it as removable storage.",
-                                    "OK"
-                                ) { }
-                            }
-                        ),
-                        onDismiss = { pickingDrive = false }
                     )
                 }
             }

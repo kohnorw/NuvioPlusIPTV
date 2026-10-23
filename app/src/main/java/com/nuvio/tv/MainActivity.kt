@@ -54,7 +54,6 @@ import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.filled.GridView
-import androidx.compose.material.icons.filled.RadioButtonChecked
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Explore
@@ -307,12 +306,6 @@ open class MainActivity : ComponentActivity() {
     lateinit var onDemandRepository: com.nuvio.tv.livetv.ondemand.OnDemandRepository
 
     @Inject
-    lateinit var liveTvRecorder: com.nuvio.tv.livetv.record.LiveTvRecorder
-
-    @Inject
-    lateinit var liveTvRecordingScheduler: com.nuvio.tv.livetv.record.LiveTvRecordingScheduler
-
-    @Inject
     lateinit var layoutPreferenceDataStore: LayoutPreferenceDataStore
 
     @Inject
@@ -410,8 +403,6 @@ open class MainActivity : ComponentActivity() {
         // Live TV fork: start reading the saved channel list and guide as the app opens (before
         // any screen, even the profile picker), so Live TV is ready when you get to it.
         lifecycleScope.launch { runCatching { com.nuvio.tv.livetv.startup.LiveTvPreload.start(this@MainActivity) } }
-        // Live TV fork: scheduled recordings (sets their alarms; series look for new airings).
-        runCatching { liveTvRecordingScheduler.start() }
         isFirstResumeAfterCreate = true
         window?.setBackgroundDrawable(ColorDrawable(android.graphics.Color.TRANSPARENT))
 
@@ -1101,15 +1092,6 @@ open class MainActivity : ComponentActivity() {
                     val onDemandHasContent = remember { onDemandRepository.also { it.start() }.hasContent }
                         .collectAsState().value
                     val onDemandInSidebar = onDemandHasContent && liveTvSettingsNow.onDemandInSidebar
-                    // Live TV fork: Recordings has its own menu entry once there's anything recorded
-                    // (and it's not switched off in Live TV settings).
-                    val allRecordings = liveTvRecorder.recordings.collectAsState().value
-                    val recordingsInSidebar = liveTvSettingsNow.recordingsInSidebar && (allRecordings.isNotEmpty() ||
-                        liveTvRecordingScheduler.schedules.collectAsState().value.isNotEmpty() ||
-                        liveTvRecordingScheduler.series.collectAsState().value.isNotEmpty())
-                    val recordingNow = allRecordings.any {
-                        it.status == com.nuvio.tv.livetv.record.RecordingStatus.RECORDING
-                    }
                     // (The Live TV sub-list is gone: every page is in the one menu again. These stay
                     // so the menus' wiring is unchanged; nothing opens a sub-list any more.)
                     var liveTvGroupOpen by remember { mutableStateOf(false) }
@@ -1122,7 +1104,6 @@ open class MainActivity : ComponentActivity() {
                             // first, like every other page), even while its catalog is being
                             // checked or updated; only its menu entry depends on having content.
                             add(Screen.OnDemand.route)
-                            add(Screen.Recordings.route)
                             add(Screen.Search.route)
                             add(Screen.Library.route)
                             add(Screen.Settings.route)
@@ -1147,9 +1128,7 @@ open class MainActivity : ComponentActivity() {
                         strNavSettings,
                         discoverLocation,
                         liveTvInSidebar,
-                        onDemandInSidebar,
-                        recordingsInSidebar,
-                        recordingNow
+                        onDemandInSidebar
                     ) {
                         buildList {
                             add(
@@ -1188,16 +1167,6 @@ open class MainActivity : ComponentActivity() {
                                 }
                                 if (onDemandInSidebar) {
                                     add(DrawerItem(route = Screen.OnDemand.route, label = "On Demand", icon = Icons.Default.VideoLibrary))
-                                }
-                                if (recordingsInSidebar) {
-                                    add(
-                                        DrawerItem(
-                                            route = Screen.Recordings.route,
-                                            label = "Recordings",
-                                            icon = Icons.Default.RadioButtonChecked,
-                                            badge = recordingNow
-                                        )
-                                    )
                                 }
                             }
                             liveTvPages.forEachIndexed { i, page -> add(if (i == 0) page.copy(sectionStart = true) else page) }

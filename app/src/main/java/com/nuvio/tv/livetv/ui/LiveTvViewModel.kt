@@ -81,9 +81,7 @@ class LiveTvViewModel @Inject constructor(
     private val matcher247: com.nuvio.tv.livetv.data.LiveTv247Matcher,
     layoutPrefs: com.nuvio.tv.data.local.LayoutPreferenceDataStore,
     driveSync: com.nuvio.tv.livetv.sync.LiveTvDriveSync,
-    bridgeSync: com.nuvio.tv.livetv.sync.LiveTvBridgeSync,
-    val recorder: com.nuvio.tv.livetv.record.LiveTvRecorder,
-    val scheduler: com.nuvio.tv.livetv.record.LiveTvRecordingScheduler
+    bridgeSync: com.nuvio.tv.livetv.sync.LiveTvBridgeSync
 ) : ViewModel() {
 
     init {
@@ -486,17 +484,6 @@ class LiveTvViewModel @Inject constructor(
     fun preview(channel: LiveChannel) {
         if (!switchingToBackup) backupTried.clear()
         _catchup.value = null
-        // Another channel from a provider that's recording: the recording holds a connection.
-        recorder.recordings.value.firstOrNull {
-            it.isRecording && it.channelKey != channel.key &&
-                repository.channels.value.firstOrNull { c -> c.key == it.channelKey }?.sourceId == channel.sourceId
-        }?.let { rec ->
-            if (playback.playingChannel?.key != channel.key) {
-                com.nuvio.tv.livetv.record.LiveTvNotice.show(
-                    "Recording \"${rec.title}\" is using a connection to this provider. If this channel doesn't play, your account may allow only one at a time."
-                )
-            }
-        }
         playback.play(channel)
         // Remember the group you watched in, so Live TV reopens there.
         val group = session.currentGroupId.value?.takeIf { it != ChannelGroup.SEARCH }
@@ -1174,78 +1161,6 @@ class LiveTvViewModel @Inject constructor(
 
     fun channelByKey(key: String?): LiveChannel? =
         key?.let { k -> displayChannels.value.firstOrNull { it.key == k } ?: playback.playingChannel?.takeIf { it.key == k } }
-
-    // ------------------------------------------------------------ recording
-
-    val schedules = scheduler.schedules
-    val seriesRules = scheduler.series
-
-    /** Record a show from the guide (or cancel it if it's already set). Returns a message. */
-    fun toggleScheduled(channel: LiveChannel, program: EpgProgram): String {
-        if (scheduler.isScheduled(channel.key, program)) {
-            scheduler.cancel(channel.key, program.startMs)
-            return "Recording cancelled"
-        }
-        // On now, on a channel without catch-up: record it now (sharing the connection if you're
-        // watching it). With catch-up, the whole show is saved from catch-up after it ends.
-        val now = System.currentTimeMillis()
-        if (channel.catchup == null && now >= program.startMs && now < program.stopMs && recorder.activeFor(channel.key) == null) {
-            return toggleRecording(channel)
-        }
-        return scheduler.add(channel, program)
-    }
-
-    /** Record every airing of this show on this channel (or stop that). Returns a message. */
-    fun toggleSeries(channel: LiveChannel, program: EpgProgram): String {
-        scheduler.seriesFor(channel.key, titleMarks(program.title).title)?.let {
-            scheduler.removeSeries(it.id)
-            return "Stopped recording \"${it.title}\""
-        }
-        return scheduler.addSeries(channel, program)
-    }
-
-    fun isSeries(channel: LiveChannel, program: EpgProgram): Boolean =
-        scheduler.seriesFor(channel.key, titleMarks(program.title).title) != null
-
-    /** Every recording (for the REC marks in the guide and the player). */
-    val recordings = recorder.recordings
-
-    /**
-     * Record the show on now on [channel] (or stop the recording running on it). Recording
-     * starts from now and runs to 5 minutes past the show's end (an hour with no guide). If
-     * you're watching this channel, you carry on watching from the recording, so one connection
-     * to the provider does both. Returns a message to show.
-     */
-    fun toggleRecording(channel: LiveChannel): String {
-        recorder.activeFor(channel.key)?.let { running ->
-            recorder.stop(running.id)
-            return "Recording stopped. It's in Recordings."
-        }
-        val now = System.currentTimeMillis()
-        val show = currentProgram(channel.key, now)?.takeIf { !LiveTvRepository.isPlaceholderTitle(it.title) }
-        val stopAt = if (show != null && show.stopMs > now) show.stopMs + 5 * 60_000L else now + 60 * 60_000L
-        val title = show?.title?.let { titleMarks(it).title } ?: channel.name
-        // Roughly 2 GB an hour in HD: say so if it may not fit.
-        val needed = (stopAt - now) / 3_600_000.0 * 2.0 * 1024 * 1024 * 1024
-        val watching = playback.playingChannel?.key == channel.key && playback.state.value.catchupTitle == null
-        val url = playback.liveUrlFor(channel)
-        if (watching) playback.handOverForRecording()
-        val rec = recorder.start(
-            channel = channel,
-            url = url,
-            title = title,
-            episode = show?.episode,
-            description = show?.description,
-            programStartMs = show?.startMs ?: 0L,
-            programStopMs = show?.stopMs ?: 0L,
-            stopAtMs = stopAt,
-            startDelayMs = if (watching) 1_500L else 0L
-        )
-        if (watching) playback.playFromRecording(recorder.playlistFile(rec))
-        val until = formatClock(stopAt, settings.value.use24HourClock)
-        return if (recorder.freeBytes() < needed) "Recording \"$title\" until $until. Storage is low, so it may stop early."
-        else "Recording \"$title\" until $until"
-    }
 
     fun currentProgram(channelKey: String, at: Long = _now.value): EpgProgram? =
         programs.value[channelKey]?.firstOrNull { at >= it.startMs && at < it.stopMs }

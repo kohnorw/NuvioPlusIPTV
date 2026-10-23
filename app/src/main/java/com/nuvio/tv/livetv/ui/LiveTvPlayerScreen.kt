@@ -92,7 +92,6 @@ fun LiveTvPlayerScreen(
     val pictureShape = com.nuvio.tv.livetv.player.PictureShape.of(playback.channelKey?.let { pictureShapes[it] })
     val ui by viewModel.uiState.collectAsStateWithLifecycle()
     val programs by viewModel.programs.collectAsStateWithLifecycle()
-    val recordings by viewModel.recordings.collectAsStateWithLifecycle()
     val now by viewModel.now.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     val view = LocalView.current
@@ -881,21 +880,6 @@ fun LiveTvPlayerScreen(
                     .padding(horizontal = 18.dp, vertical = 8.dp)
             )
         }
-        // This channel is being recorded: a small REC mark in the corner.
-        if (playback.channelKey != null && recordings.any { it.channelKey == playback.channelKey && it.isRecording }) {
-            LiveText(
-                "● REC",
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(top = 24.dp, end = 28.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(Color.Black.copy(alpha = 0.6f))
-                    .padding(horizontal = 10.dp, vertical = 4.dp),
-                color = LIVE_RED,
-                size = 14.sp,
-                weight = FontWeight.Bold
-            )
-        }
     }
 
     when (dialog) {
@@ -909,12 +893,6 @@ fun LiveTvPlayerScreen(
                 archive = playback.catchupTitle != null,
                 canRestart = playback.catchupTitle == null && viewModel.canWatchFromStart(ch),
                 onRestart = { dialog = PlayerDialog.NONE; viewModel.watchFromStart(ch); showBanner() },
-                recording = recordings.any { it.channelKey == ch.key && it.isRecording },
-                onRecord = {
-                    dialog = PlayerDialog.NONE
-                    toast = viewModel.toggleRecording(ch)
-                    scope.launch { delay(60); runCatching { rootFocus.requestFocus() } }
-                },
                 onDismiss = { dialog = PlayerDialog.NONE; scope.launch { delay(60); runCatching { rootFocus.requestFocus() } } },
                 onAudio = { dialog = PlayerDialog.AUDIO },
                 onSubtitles = { dialog = PlayerDialog.SUBTITLES },
@@ -1116,9 +1094,6 @@ private fun PlayerOptionsDialog(
     archive: Boolean,
     canRestart: Boolean,
     onRestart: () -> Unit,
-    /** This channel is being recorded right now. */
-    recording: Boolean,
-    onRecord: () -> Unit,
     onDismiss: () -> Unit,
     onAudio: () -> Unit,
     onSubtitles: () -> Unit,
@@ -1145,8 +1120,6 @@ private fun PlayerOptionsDialog(
         ) {
             if (archive) MenuItem("Back to live", Modifier.focusRequester(first), onBackToLive)
             if (canRestart) MenuItem("Watch from the beginning", Modifier.focusRequester(first), onRestart)
-            // Record the show on now (not while watching a catch-up replay).
-            if (!archive) MenuItem(if (recording) "Stop recording" else "Record this show", onClick = onRecord)
             MenuItem("Audio track", if (archive || canRestart) Modifier else Modifier.focusRequester(first), onAudio)
             currentTitle?.let { t -> MenuItem("Find & stream \"$t\" in Nuvio", onClick = { onFind(t) }) }
             MenuItem("Subtitles", onClick = onSubtitles)

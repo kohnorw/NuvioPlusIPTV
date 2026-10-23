@@ -179,15 +179,6 @@ fun LiveTvGuideScreen(
     val ui by viewModel.uiState.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val user by viewModel.userState.collectAsStateWithLifecycle()
-    // Channels being recorded, and until when (for the REC dot on their shows).
-    val recordingsList by viewModel.recordings.collectAsStateWithLifecycle()
-    val recordingUntil = remember(recordingsList) {
-        recordingsList.filter { it.isRecording }.associate { it.channelKey to (it.startedAtMs to it.stopAtMs) }
-    }
-    val schedulesList by viewModel.schedules.collectAsStateWithLifecycle()
-    val seriesList by viewModel.seriesRules.collectAsStateWithLifecycle()
-    // Shows set to record, by channel (for the red dot in the guide).
-    val scheduledStarts = remember(schedulesList) { schedulesList.groupBy({ it.channel.key }, { it.startMs }).mapValues { it.value.toSet() } }
     // Reminders by channel, worked out once (each row used to filter the whole list itself, and
     // got a new set every redraw, so no row could ever skip redrawing).
     val reminderStartsByChannel = remember(user.reminders) {
@@ -196,33 +187,6 @@ fun LiveTvGuideScreen(
     // The guide's width, measured once for every row (see ProgramArea).
     var gridWidthPx by remember { mutableIntStateOf(0) }
 
-    /** The Record item for a show, or null when it can't be recorded (already over, no catch-up). */
-    fun recordLabel(ch: LiveChannel, p: EpgProgram?): String? {
-        p ?: return null
-        val nowMs = System.currentTimeMillis()
-        val onNow = nowMs >= p.startMs && nowMs < p.stopMs
-        return when {
-            onNow && recordingUntil.containsKey(ch.key) -> "Stop recording"
-            p.startMs in scheduledStarts[ch.key].orEmpty() -> "Cancel recording"
-            p.stopMs <= nowMs -> if (CatchupUrlBuilder.isAvailable(ch.catchup, p.startMs, nowMs)) "Save to Recordings" else null
-            else -> "Record"
-        }
-    }
-    fun seriesLabel(ch: LiveChannel, p: EpgProgram?): String? {
-        p ?: return null
-        if (p.stopMs <= System.currentTimeMillis()) return null
-        val n = com.nuvio.tv.livetv.data.LiveTvRepository.normalize(titleMarks(p.title).title)
-        return if (seriesList.any { it.channel.key == ch.key && it.norm == n }) "Stop recording series" else "Record series"
-    }
-    fun doRecord(ch: LiveChannel, p: EpgProgram) {
-        val nowMs = System.currentTimeMillis()
-        val msg = if (nowMs >= p.startMs && nowMs < p.stopMs && recordingUntil.containsKey(ch.key)) viewModel.toggleRecording(ch)
-        else viewModel.toggleScheduled(ch, p)
-        com.nuvio.tv.livetv.record.LiveTvNotice.show(msg)
-    }
-    fun doSeries(ch: LiveChannel, p: EpgProgram) {
-        com.nuvio.tv.livetv.record.LiveTvNotice.show(viewModel.toggleSeries(ch, p))
-    }
     val programs by viewModel.programs.collectAsStateWithLifecycle()
     val status by viewModel.status.collectAsStateWithLifecycle()
     val playback by viewModel.playbackState.collectAsStateWithLifecycle()
@@ -303,7 +267,6 @@ fun LiveTvGuideScreen(
     val groupsListState = rememberLazyListState()
     var menuTarget by remember { mutableStateOf<MenuTarget?>(null) }
     /** Schedule a Recording (long-press menu): the channel it's for. */
-    var manualRecordingFor by remember { mutableStateOf<LiveChannel?>(null) }
     var infoTarget by remember { mutableStateOf<MenuTarget?>(null) }
     var searchOpen by remember { mutableStateOf(false) }
     var textPrompt by remember { mutableStateOf<TextPrompt?>(null) }
@@ -1328,8 +1291,6 @@ fun LiveTvGuideScreen(
                                                 (reorderActive && reorderKey == null && index == row),
                                             quality = if (settings.showQualityBadges) user.channelQuality[ch.key] else null,
                                             reminderStarts = reminderStartsByChannel[ch.key].orEmpty(),
-                                            recordingSpan = recordingUntil[ch.key],
-                                            scheduledStarts = scheduledStarts[ch.key].orEmpty(),
                                             programAreaWidth = programAreaWidth
                                         ) }
                                     }
@@ -1595,31 +1556,11 @@ fun LiveTvGuideScreen(
         }
 
         // ---------------------------------------------------------------- dialogs
-        manualRecordingFor?.let { ch ->
-            com.nuvio.tv.livetv.record.ManualRecordingDialog(
-                channel = ch,
-                use24h = settings.use24HourClock,
-                onSchedule = { title, start, stop ->
-                    manualRecordingFor = null
-                    com.nuvio.tv.livetv.record.LiveTvNotice.show(viewModel.scheduler.addManual(ch, title, start, stop))
-                    scope.launch { delay(60); runCatching { gridFocus.requestFocus() } }
-                },
-                onDismiss = {
-                    manualRecordingFor = null
-                    scope.launch { delay(60); runCatching { gridFocus.requestFocus() } }
-                }
-            )
-        }
         menuTarget?.let { target ->
             ChannelContextMenu(
                 target = target,
                 reminderSet = target.block?.program?.let { p -> user.reminders.any { it.channelKey == target.channel.key && it.startMs == p.startMs } } == true,
                 onRemind = { p -> viewModel.toggleReminder(target.channel, p); menuTarget = null },
-                recordLabel = recordLabel(target.channel, target.block?.program),
-                onRecord = { p -> menuTarget = null; doRecord(target.channel, p) },
-                seriesLabel = seriesLabel(target.channel, target.block?.program),
-                onSeries = { p -> menuTarget = null; doSeries(target.channel, p) },
-                onScheduleRecording = { menuTarget = null; manualRecordingFor = target.channel },
                 canRestart = viewModel.canWatchFromStart(target.channel),
                 onRestart = {
                     menuTarget = null
@@ -1730,8 +1671,6 @@ fun LiveTvGuideScreen(
                 },
                 reminderSet = target.block?.program?.let { p -> user.reminders.any { it.channelKey == target.channel.key && it.startMs == p.startMs } } == true,
                 onRemind = { p -> viewModel.toggleReminder(target.channel, p); infoTarget = null },
-                recordLabel = recordLabel(target.channel, target.block?.program),
-                onRecord = { p -> infoTarget = null; doRecord(target.channel, p) },
                 canRestart = viewModel.canWatchFromStart(target.channel),
                 onRestart = {
                     infoTarget = null
@@ -2948,7 +2887,6 @@ private fun ChannelContextMenu(
             }
             if (program != null && recordLabel != null) item { MenuItem(recordLabel, onClick = { onRecord(program) }) }
             if (program != null && seriesLabel != null) item { MenuItem(seriesLabel, onClick = { onSeries(program) }) }
-            item { MenuItem("Schedule a recording…", onClick = onScheduleRecording) }
             if (program != null) item { MenuItem("Program info", onClick = onProgramInfo) }
             item { MenuItem(if (isFavorite) "Remove from favorites" else "Add to favorites", onClick = onToggleFavorite) }
             if (isFavorite && inFavoritesGroup) {
