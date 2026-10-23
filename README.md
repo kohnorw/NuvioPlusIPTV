@@ -10,7 +10,7 @@
 [![Based on Nuvio](https://img.shields.io/badge/based%20on-NuvioMedia%2FNuvioTV-8A2BE2?style=for-the-badge)](https://github.com/NuvioMedia/NuvioTV)
 [![Support on Ko-fi](https://img.shields.io/badge/support-Ko--fi-FF5E5B?style=for-the-badge&logo=ko-fi&logoColor=white)](https://ko-fi.com/homelessbrian)
 
-**Downloader code: 6532491**
+**Downloader code: 5772128**
 
 [Download](#-installation) · [Features](#-features) · [Setup](#-getting-started) · [Remote controls](CONTROLS.md) · [Report a bug](#-reporting-bugs-and-requesting-features) · [Support](#-support-the-project)
 
@@ -111,10 +111,10 @@ and every 15 minutes. Turn it off under **Settings → Live TV → Nuvio Bridge*
 
 ## 📥 Installation
 
-### The quick way: Downloader code **6532491**
+### The quick way: Downloader code **5772128**
 
 1. Install **Downloader** (by AFTVnews) from your TV's app store.
-2. Open it, type **6532491** in the search or address box, and press **Go**.
+2. Open it, type **5772128** in the search or address box, and press **Go**.
 3. It downloads the latest **universal** version (works on every device). Press **Install**, allowing installs from unknown sources when asked.
 
 ### Or pick the APK for your device
