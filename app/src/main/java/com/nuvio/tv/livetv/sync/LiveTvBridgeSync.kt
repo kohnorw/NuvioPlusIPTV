@@ -97,13 +97,19 @@ class LiveTvBridgeSync @Inject constructor(
         started = true
         scope.launch {
             // Wait for the channel list: matching needs names.
-            repository.channels.first { it.isNotEmpty() }
+            kotlinx.coroutines.withTimeoutOrNull(60_000) { repository.channels.first { it.isNotEmpty() } }
             syncNow()
         }
         scope.launch {
             prefs.userState.map { it.favorites }.distinctUntilChanged().drop(1).debounce(3_000).collect {
                 if (!applying) syncNow()
             }
+        }
+        scope.launch {
+            prefs.playlists.map { list -> list.map { sourceId(it.isXtream, it.xtreamServer, it.xtreamUsername, it.url) }.toSet() }
+                .distinctUntilChanged().drop(1).debounce(3_000).collect {
+                    if (!applying) syncNow()
+                }
         }
         scope.launch {
             while (isActive) {
@@ -115,14 +121,14 @@ class LiveTvBridgeSync @Inject constructor(
 
     /** Turns syncing on again (it's on by default). */
     fun connect() {
-        store.edit().putBoolean(KEY_ON, true).remove(KEY_LAST_SET).apply()
+        store.edit().putBoolean(KEY_ON, true).remove(KEY_LAST_SET).remove(KEY_LAST_SOURCES).apply()
         _state.value = load().copy(message = "On")
         start()
         syncNowAsync()
     }
 
     fun disconnect() {
-        store.edit().putBoolean(KEY_ON, false).remove(KEY_LAST_SET).apply()
+        store.edit().putBoolean(KEY_ON, false).remove(KEY_LAST_SET).remove(KEY_LAST_SOURCES).apply()
         _state.value = load().copy(message = "Off")
     }
 
@@ -137,13 +143,13 @@ class LiveTvBridgeSync @Inject constructor(
         }
         mutex.withLock {
             _state.value = load().copy(busy = true)
-            runCatching { sync(base, sid) }
+            runCatching { syncSources(base, sid) + sync(base, sid) }
                 .onSuccess { changed ->
                     val now = System.currentTimeMillis()
                     store.edit().putLong(KEY_LAST_SYNC, now).apply()
                     _state.value = _state.value.copy(
                         busy = false, lastSyncMs = now,
-                        message = if (changed > 0) "Synced $changed favorite${if (changed == 1) "" else "s"}" else "Up to date"
+                        message = if (changed > 0) "Synced $changed change${if (changed == 1) "" else "s"}" else "Up to date"
                     )
                 }
                 .onFailure { e ->
@@ -151,6 +157,83 @@ class LiveTvBridgeSync @Inject constructor(
                     _state.value = _state.value.copy(busy = false, message = e.message ?: "Sync failed")
                 }
         }
+    }
+
+    /**
+     * Playlists (Xtream logins and M3U links), both ways, merged like favorites: one added on
+     * either side is added to the other, one removed on either side is removed from the other.
+     * The same playlist is recognised by server + username (Xtream) or link (M3U).
+     */
+    private suspend fun syncSources(base: String, sid: String): Int {
+        val remote = getJson(base, sid, "/api/iptv/sources/export").optJSONArray("sources") ?: JSONArray()
+        val remoteById = LinkedHashMap<String, JSONObject>()
+        for (i in 0 until remote.length()) {
+            val o = remote.optJSONObject(i) ?: continue
+            val xt = o.optString("kind") == "xtream"
+            val id = sourceId(xt, o.optString("server"), o.optString("username"), o.optString("url"))
+            if (id.isNotEmpty()) remoteById.putIfAbsent(id, o)
+        }
+        val local = prefs.playlists.first()
+        val localById = LinkedHashMap<String, com.nuvio.tv.livetv.model.PlaylistSource>()
+        local.forEach { p -> sourceId(p.isXtream, p.xtreamServer, p.xtreamUsername, p.url).takeIf { it.isNotEmpty() }?.let { localById.putIfAbsent(it, p) } }
+
+        val a = localById.keys
+        val b = remoteById.keys
+        val last = store.getStringSet(KEY_LAST_SOURCES, null)
+        val result: Set<String> = if (last == null) LinkedHashSet(a + b) else LinkedHashSet<String>().apply {
+            addAll(a.filter { it in b || it !in last })
+            addAll(b.filter { it in a || it !in last })
+        }
+
+        var changed = 0
+        applying = true
+        try {
+            // This TV
+            for ((id, p) in localById) if (id !in result) { repository.removePlaylist(p.id); changed++ }
+            for (id in result) {
+                if (id in localById) continue
+                val o = remoteById[id] ?: continue
+                if (o.optString("kind") == "xtream") {
+                    repository.addXtream(o.optString("name"), o.optString("server"), o.optString("username"), o.optString("password"))
+                } else {
+                    repository.addPlaylist(o.optString("name"), o.optString("url"), o.optString("userAgent"))
+                }
+                changed++
+            }
+            // The bridge
+            for ((id, o) in remoteById) if (id !in result) { deleteRemote(base, sid, o.optString("id")); changed++ }
+            for (id in result) {
+                if (id in remoteById) continue
+                val p = localById[id] ?: continue
+                if (p.isXtream) {
+                    postJson(base, sid, "/api/iptv/xtream", JSONObject()
+                        .put("name", p.name).put("server", p.xtreamServer)
+                        .put("username", p.xtreamUsername).put("password", p.xtreamPassword)
+                        .put("userAgent", p.userAgent).put("importLive", p.importLive))
+                } else {
+                    postJson(base, sid, "/api/iptv/m3u", JSONObject()
+                        .put("name", p.name).put("url", p.url).put("userAgent", p.userAgent))
+                }
+                changed++
+            }
+        } finally {
+            if (changed > 0) delay(3_500) // past the change listeners' debounce
+            applying = false
+        }
+        store.edit().putStringSet(KEY_LAST_SOURCES, HashSet(result)).apply()
+        return changed
+    }
+
+    private fun postJson(base: String, sid: String, path: String, body: JSONObject) {
+        val req = Request.Builder().url(base + path).header("Authorization", "Bearer $sid")
+            .post(body.toString().toRequestBody(json)).build()
+        http.newCall(req).execute().use { res -> check(res) }
+    }
+
+    private fun deleteRemote(base: String, sid: String, id: String) {
+        if (id.isBlank()) return
+        val req = Request.Builder().url("$base/api/iptv/sources/$id").header("Authorization", "Bearer $sid").delete().build()
+        http.newCall(req).execute().use { res -> check(res) }
     }
 
     /** One full two-way merge. Returns how many favorites changed on either side. */
@@ -227,7 +310,10 @@ class LiveTvBridgeSync @Inject constructor(
             toggleRemote(base, sid, k); changed++
         }
 
-        store.edit().putStringSet(KEY_LAST_SET, HashSet(result)).apply()
+        // Remember only favorites both sides can show. One whose channel was missing on a side
+        // (a playlist still loading, or not added there yet) then counts as new next time, so
+        // it's copied over instead of being taken for a removal.
+        store.edit().putStringSet(KEY_LAST_SET, HashSet(result.filter { it in appNameToKey && it in remoteNameToKey })).apply()
         return changed
     }
 
@@ -256,6 +342,19 @@ class LiveTvBridgeSync @Inject constructor(
         private const val KEY_ON = "on"
         private const val KEY_LAST_SYNC = "last_sync"
         private const val KEY_LAST_SET = "last_set"
+        private const val KEY_LAST_SOURCES = "last_sources"
+
+        /** The same playlist on both sides: Xtream server (no scheme or default port) + username, or the M3U link. */
+        fun sourceId(xtream: Boolean, server: String?, username: String?, url: String?): String {
+            if (xtream) {
+                val host = server.orEmpty().trim().lowercase()
+                    .replace(Regex("^https?://"), "").trimEnd('/').removeSuffix(":80")
+                val user = username.orEmpty().trim().lowercase()
+                return if (host.isEmpty() || user.isEmpty()) "" else "x|$host|$user"
+            }
+            val u = url.orEmpty().trim()
+            return if (u.isEmpty()) "" else "m|$u"
+        }
 
         /** Channel names compared loosely: case, accents and punctuation ignored. */
         fun norm(name: String): String =
