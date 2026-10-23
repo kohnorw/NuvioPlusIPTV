@@ -223,7 +223,7 @@ data class LiveTvSettings(
     val zapMode: ZapMode = ZapMode.GROUP,
     val autoPlayLastChannel: Boolean = false,
     val rememberLastGroup: Boolean = true,
-    val openFullscreenOnSelect: Boolean = false,
+    val openFullscreenOnSelect: Boolean = true,
     val infoBannerSeconds: Int = 5,
     val playlistRefreshHours: Int = 24,
     val epgRefreshHours: Int = 12,
