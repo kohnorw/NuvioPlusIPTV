@@ -58,8 +58,9 @@ jobs:
 
       - name: Write app keys
         env:
-          NUVIO_BACKEND_URL: ${{ secrets.NUVIO_BACKEND_URL }}
-          NUVIO_BACKEND_KEY: ${{ secrets.NUVIO_BACKEND_KEY }}
+          # Falls back to Nuvio's public server and publishable key (the same ones nuvio-bridge uses).
+          NUVIO_BACKEND_URL: ${{ secrets.NUVIO_BACKEND_URL || 'https://api.nuvio.tv' }}
+          NUVIO_BACKEND_KEY: ${{ secrets.NUVIO_BACKEND_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzgxNTIxMzQ2LCJleHAiOjE5MzkyMDEzNDZ9.tmQaj682pwzehpqlgCDMnySOqiUvpgRbrE43T4VJpDI' }}
           TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
           TRAKT_CLIENT_ID: ${{ secrets.TRAKT_CLIENT_ID }}
           TRAKT_CLIENT_SECRET: ${{ secrets.TRAKT_CLIENT_SECRET }}
