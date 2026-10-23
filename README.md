@@ -4,8 +4,8 @@
 
 **Everything in Nuvio, plus everything IPTV: a TiviMate-style Live TV guide, catch-up, and your provider's movies and series, all in one app for Google TV, Android TV and Fire TV.**
 
-[![Latest release](https://img.shields.io/github/v/release/homelessbrian/NuvioPlusIPTV?include_prereleases&label=latest&style=for-the-badge)](https://github.com/homelessbrian/NuvioPlusIPTV/releases)
-[![Downloads](https://img.shields.io/github/downloads/homelessbrian/NuvioPlusIPTV/total?style=for-the-badge)](https://github.com/homelessbrian/NuvioPlusIPTV/releases)
+[![Latest release](https://img.shields.io/github/v/release/kohnorw/NuvioPlusIPTV?include_prereleases&label=latest&style=for-the-badge)](https://github.com/kohnorw/NuvioPlusIPTV/releases)
+[![Downloads](https://img.shields.io/github/downloads/kohnorw/NuvioPlusIPTV/total?style=for-the-badge)](https://github.com/kohnorw/NuvioPlusIPTV/releases)
 [![License](https://img.shields.io/badge/license-GPL--3.0-blue?style=for-the-badge)](LICENSE)
 [![Based on Nuvio](https://img.shields.io/badge/based%20on-NuvioMedia%2FNuvioTV-8A2BE2?style=for-the-badge)](https://github.com/NuvioMedia/NuvioTV)
 [![Support on Ko-fi](https://img.shields.io/badge/support-Ko--fi-FF5E5B?style=for-the-badge&logo=ko-fi&logoColor=white)](https://ko-fi.com/homelessbrian)
@@ -109,24 +109,15 @@ and every 15 minutes. Turn it off under **Settings → Live TV → Nuvio Bridge*
 2. Open it, type **5772128** in the search or address box, and press **Go**.
 3. It downloads the latest **universal** version (works on every device). Press **Install**, allowing installs from unknown sources when asked.
 
-### Or pick the APK for your device
+### Or download the APK yourself
 
-The universal version works everywhere. The device-specific ones are smaller downloads.
-
-1. Open the **[latest release](https://github.com/homelessbrian/NuvioPlusIPTV/releases)**.
-2. Download the APK for your device:
-
-   | Device | APK |
-   |---|---|
-   | Most Google TV / Android TV devices | `arm64-v8a` |
-   | Fire TV (all models), older or budget boxes | `armeabi-v7a` |
-   | Not sure (works everywhere) | `universal` |
-
+1. Open the **[latest release](https://github.com/kohnorw/NuvioPlusIPTV/releases/latest)**.
+2. Download the `universal` APK. It works on every Google TV, Android TV and Fire TV device.
 3. Install it with a file manager or **Downloader**, allowing installs from unknown sources when asked.
 
-Requires **Android 7.0 or newer** (Fire OS 6 or later). It installs **alongside** the official Nuvio app.
+Requires **Android 7.0 or newer** (Fire OS 6 or later). It installs **alongside** the official Nuvio app. It also installs over homelessbrian's Nuvio + IPTV, keeping your setup.
 
-**Updating:** updates appear **inside the app**. Each new Nuvio release is followed by a matching Nuvio + IPTV version (currently based on Nuvio 1.1.0-beta.8).
+**Updating:** the app checks this fork's releases and offers updates **inside the app**. Downloader code **5772128** always installs the newest one.
 
 ---
 
@@ -153,13 +144,13 @@ Every button for the guide, full screen and On Demand: see **[CONTROLS.md](CONTR
 
 ## 🐞 Reporting bugs and requesting features
 
-Please search [existing issues](https://github.com/homelessbrian/NuvioPlusIPTV/issues) first.
+Please search [existing issues](https://github.com/kohnorw/NuvioPlusIPTV/issues) first.
 
 | | |
 |---|---|
-| 🐛 **Something isn't working** | [Report a bug](https://github.com/homelessbrian/NuvioPlusIPTV/issues/new?template=live_tv_bug.yml) |
-| 📺 **An idea for a new feature** | [Request a feature](https://github.com/homelessbrian/NuvioPlusIPTV/issues/new?template=live_tv_feature.yml) |
-| 🎨 **The look or layout could be better** | [Suggest a UI / UX improvement](https://github.com/homelessbrian/NuvioPlusIPTV/issues/new?template=live_tv_ui.yml) |
+| 🐛 **Something isn't working** | [Report a bug](https://github.com/kohnorw/NuvioPlusIPTV/issues/new?template=live_tv_bug.yml) |
+| 📺 **An idea for a new feature** | [Request a feature](https://github.com/kohnorw/NuvioPlusIPTV/issues/new?template=live_tv_feature.yml) |
+| 🎨 **The look or layout could be better** | [Suggest a UI / UX improvement](https://github.com/kohnorw/NuvioPlusIPTV/issues/new?template=live_tv_ui.yml) |
 
 **If the app crashes,** scan the QR code on the crash screen with your phone and paste the text into your report.
 
