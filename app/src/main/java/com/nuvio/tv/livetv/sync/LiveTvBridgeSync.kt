@@ -22,7 +22,6 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -52,13 +51,15 @@ data class BridgeSyncState(
  * favorite added on either side is added to the other, one removed on either side is removed
  * from the other, and a favorite whose channel the other side doesn't have is left alone.
  *
- * Only the sign-in cookie is kept on the TV (never the password). It lasts a year on the bridge.
+ * It signs in with the Nuvio account this app is already signed in to: the bridge checks the
+ * app's access token, so there is nothing to enter and no password is stored.
  */
 @Singleton
 class LiveTvBridgeSync @Inject constructor(
     @ApplicationContext context: Context,
     private val prefs: LiveTvPreferences,
-    private val repository: LiveTvRepository
+    private val repository: LiveTvRepository,
+    private val auth: io.github.jan.supabase.auth.Auth
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val store = context.applicationContext.getSharedPreferences("livetv_bridge_sync", Context.MODE_PRIVATE)
@@ -79,11 +80,15 @@ class LiveTvBridgeSync @Inject constructor(
     @Volatile private var applying = false
 
     private fun load() = BridgeSyncState(
-        connected = !store.getString(KEY_SID, null).isNullOrBlank(),
-        url = store.getString(KEY_URL, null),
-        email = store.getString(KEY_EMAIL, null),
+        connected = store.getBoolean(KEY_ON, true),
+        url = BRIDGE_URL,
+        email = runCatching { auth.currentUserOrNull()?.email }.getOrNull(),
         lastSyncMs = store.getLong(KEY_LAST_SYNC, 0L)
     )
+
+    /** The Nuvio sign-in this app already has. Null when signed out. */
+    private fun token(): String? =
+        runCatching { auth.currentSessionOrNull()?.accessToken }.getOrNull()?.takeIf { it.isNotBlank() }
 
     /** Syncs once channels are loaded, after every favorite change, and every 15 minutes. */
     @Synchronized
@@ -108,52 +113,30 @@ class LiveTvBridgeSync @Inject constructor(
         }
     }
 
-    fun connect(url: String, email: String, password: String) {
-        scope.launch {
-            val base = cleanUrl(url)
-            if (base == null) {
-                _state.value = _state.value.copy(message = "Enter the bridge address, like http://192.168.1.10:8080")
-                return@launch
-            }
-            _state.value = _state.value.copy(busy = true, message = "Signing in…")
-            val result = runCatching {
-                val body = JSONObject().put("email", email.trim()).put("password", password).put("remember", true)
-                val req = Request.Builder().url("$base/api/login").post(body.toString().toRequestBody(json)).build()
-                http.newCall(req).execute().use { res ->
-                    val text = res.body?.string().orEmpty()
-                    if (!res.isSuccessful) {
-                        error(runCatching { JSONObject(text).optString("error") }.getOrNull()?.ifBlank { null }
-                            ?: "Sign-in failed (${res.code})")
-                    }
-                    res.headers("Set-Cookie").firstNotNullOfOrNull { c ->
-                        c.substringBefore(';').takeIf { it.startsWith("$COOKIE=") }?.substringAfter('=')
-                    } ?: error("The bridge didn't return a session.")
-                }
-            }
-            result.onSuccess { sid ->
-                store.edit().putString(KEY_URL, base).putString(KEY_EMAIL, email.trim())
-                    .putString(KEY_SID, sid).remove(KEY_LAST_SET).apply()
-                _state.value = load().copy(message = "Connected")
-                start()
-                syncNow()
-            }.onFailure {
-                _state.value = _state.value.copy(busy = false, message = it.message ?: "Couldn't reach the bridge")
-            }
-        }
+    /** Turns syncing on again (it's on by default). */
+    fun connect() {
+        store.edit().putBoolean(KEY_ON, true).remove(KEY_LAST_SET).apply()
+        _state.value = load().copy(message = "On")
+        start()
+        syncNowAsync()
     }
 
     fun disconnect() {
-        store.edit().clear().apply()
-        _state.value = BridgeSyncState(message = "Disconnected")
+        store.edit().putBoolean(KEY_ON, false).remove(KEY_LAST_SET).apply()
+        _state.value = load().copy(message = "Off")
     }
 
     fun syncNowAsync() { scope.launch { syncNow() } }
 
     private suspend fun syncNow() {
-        val base = store.getString(KEY_URL, null) ?: return
-        val sid = store.getString(KEY_SID, null) ?: return
+        if (!store.getBoolean(KEY_ON, true)) return
+        val base = BRIDGE_URL
+        val sid = token() ?: run {
+            _state.value = load().copy(message = "Sign in to your Nuvio account to sync favorites")
+            return
+        }
         mutex.withLock {
-            _state.value = _state.value.copy(busy = true)
+            _state.value = load().copy(busy = true)
             runCatching { sync(base, sid) }
                 .onSuccess { changed ->
                     val now = System.currentTimeMillis()
@@ -250,12 +233,12 @@ class LiveTvBridgeSync @Inject constructor(
 
     private fun toggleRemote(base: String, sid: String, key: String) {
         val body = JSONObject().put("key", key).toString().toRequestBody(json)
-        val req = Request.Builder().url("$base/api/iptv/favorite").header("Cookie", "$COOKIE=$sid").post(body).build()
+        val req = Request.Builder().url("$base/api/iptv/favorite").header("Authorization", "Bearer $sid").post(body).build()
         http.newCall(req).execute().use { res -> check(res) }
     }
 
     private fun getJson(base: String, sid: String, path: String): JSONObject {
-        val req = Request.Builder().url(base + path).header("Cookie", "$COOKIE=$sid").get().build()
+        val req = Request.Builder().url(base + path).header("Authorization", "Bearer $sid").get().build()
         return http.newCall(req).execute().use { res ->
             check(res)
             JSONObject(res.body?.string().orEmpty())
@@ -263,27 +246,14 @@ class LiveTvBridgeSync @Inject constructor(
     }
 
     private fun check(res: okhttp3.Response) {
-        if (res.code == 401) {
-            store.edit().remove(KEY_SID).apply()
-            _state.value = _state.value.copy(connected = false)
-            error("Signed out of the bridge. Connect again.")
-        }
+        if (res.code == 401) error("The bridge didn't accept your Nuvio sign-in. Try again shortly.")
         if (!res.isSuccessful) error("Bridge error ${res.code}")
-    }
-
-    private fun cleanUrl(raw: String): String? {
-        var u = raw.trim().trimEnd('/')
-        if (u.isEmpty()) return null
-        if (!u.startsWith("http://", true) && !u.startsWith("https://", true)) u = "http://$u"
-        return u.toHttpUrlOrNull()?.toString()?.trimEnd('/')
     }
 
     companion object {
         private const val TAG = "LiveTvBridgeSync"
-        private const val COOKIE = "nib_sid"
-        private const val KEY_URL = "url"
-        private const val KEY_EMAIL = "email"
-        private const val KEY_SID = "sid"
+        const val BRIDGE_URL = "https://inuvio.kohnor.ca"
+        private const val KEY_ON = "on"
         private const val KEY_LAST_SYNC = "last_sync"
         private const val KEY_LAST_SET = "last_set"
 

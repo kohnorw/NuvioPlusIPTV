@@ -136,7 +136,6 @@ private sealed interface LiveDialog {
     data object HighlightChoice : LiveDialog
     data object CustomGroups : LiveDialog
     data object ConfirmRestore : LiveDialog
-    data object BridgeConnect : LiveDialog
     data object PinCheck : LiveDialog
     data object PinNew : LiveDialog
     data object PinRemove : LiveDialog
@@ -275,13 +274,13 @@ fun LiveTvSettingsContent(
                     state = bridge,
                     expanded = "bridge" in open,
                     onToggleExpanded = { toggle("bridge") },
-                    onConnect = { dialog = LiveDialog.BridgeConnect },
+                    onConnect = { viewModel.bridgeSync.connect() },
                     onSyncNow = { viewModel.bridgeSync.syncNowAsync() },
                     onDisconnect = {
                         confirm(
-                            "Disconnect Nuvio Bridge?",
+                            "Turn off Nuvio Bridge sync?",
                             "Favorites stop syncing. Nothing is removed here or on the bridge.",
-                            "Disconnect"
+                            "Turn Off"
                         ) { viewModel.bridgeSync.disconnect() }
                     }
                 )
@@ -1391,19 +1390,6 @@ fun LiveTvSettingsContent(
                 close()
             }
         )
-        LiveDialog.BridgeConnect -> SourceFormDialog(
-            title = "Connect Nuvio Bridge",
-            fields = listOf(
-                FormField("Bridge address", "http://192.168.1.10:8080", bridge.url.orEmpty()),
-                FormField("Nuvio email", "", bridge.email.orEmpty()),
-                FormField("Password", "")
-            ),
-            onDismiss = close,
-            onSave = { v, _ ->
-                if (v[0].isNotBlank() && v[1].isNotBlank() && v[2].isNotBlank()) viewModel.bridgeSync.connect(v[0], v[1], v[2])
-                close()
-            }
-        )
         LiveDialog.AddEpg -> SourceFormDialog(
             title = "Add EPG source",
             fields = listOf(FormField("Name", "Guide"), FormField("XMLTV URL", "http://…/epg.xml.gz")),
@@ -1912,15 +1898,15 @@ private fun BridgeSyncCard(
         run {
             if (!state.connected) {
                 Text(
-                    text = "Keeps your Live TV favorites the same here and on your Nuvio Bridge server, both ways. Channels are matched by name, so add the same provider on the bridge.",
+                    text = "Keeps your Live TV favorites the same here and on inuvio.kohnor.ca, both ways, using the Nuvio account this app is signed in to. Channels are matched by name.",
                     style = MaterialTheme.typography.bodySmall,
                     color = NuvioTheme.colors.TextSecondary
                 )
-                SettingsActionRow("Connect Nuvio Bridge", "Sign in with your bridge address and Nuvio account", onClick = onConnect)
+                SettingsActionRow("Turn On", "Sync favorites with the bridge", onClick = onConnect)
             } else {
-                SettingsActionRow("Bridge", state.email ?: "Connected", state.url ?: "", onClick = {})
+                SettingsActionRow("Account", state.url?.removePrefix("https://") ?: "", state.email ?: "Not signed in to Nuvio", onClick = {})
                 SettingsActionRow("Sync Now", "Favorites also sync on their own whenever they change", onClick = onSyncNow)
-                SettingsActionRow("Disconnect", "Stop syncing favorites on this TV", onClick = onDisconnect)
+                SettingsActionRow("Turn Off", "Stop syncing favorites on this TV", onClick = onDisconnect)
             }
             state.message?.let {
                 Text(text = it, style = MaterialTheme.typography.bodySmall, color = NuvioTheme.colors.TextSecondary)

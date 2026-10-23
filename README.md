@@ -23,10 +23,10 @@
 This fork has no Sports section (lighter and quicker), and syncs Live TV favorites with a
 [Nuvio Bridge](https://github.com/kohnorw/nuvio-bridge) server, both ways.
 
-**Settings → Live TV → Nuvio Bridge → Connect**, then enter the bridge address
-(`http://<server>:8080`) and your Nuvio email and password. Only the session cookie is kept
-on the TV. Channels are matched by name, so add the same provider on the bridge. Favorites
-sync when Live TV opens, a few seconds after you change one, and every 15 minutes.
+It's on by default and uses the Nuvio account the app is already signed in to: the bridge at
+`https://inuvio.kohnor.ca` checks the app's Nuvio token, so there's nothing to enter. Channels
+are matched by name. Favorites sync when Live TV opens, a few seconds after you change one,
+and every 15 minutes. Turn it off under **Settings → Live TV → Nuvio Bridge**.
 
 ---
 
