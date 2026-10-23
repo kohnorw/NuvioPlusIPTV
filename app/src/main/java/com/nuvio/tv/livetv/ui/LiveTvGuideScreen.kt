@@ -144,8 +144,6 @@ fun LiveTvGuideScreen(
     onOpenSettings: () -> Unit,
     onFindInNuvio: () -> Unit = {},
     onOpenNuvioSearch: () -> Unit = onFindInNuvio,
-    /** Full screen was opened from the Sports page: Back goes back there. */
-    onReturnToSports: () -> Unit = {},
     viewModel: LiveTvViewModel = hiltViewModel()
 ) {
     // Full screen happens right here, TiviMate style: the same video view grows from the
@@ -509,7 +507,6 @@ fun LiveTvGuideScreen(
     androidx.compose.runtime.DisposableEffect(Unit) {
         onDispose {
             LiveTvFullscreen.active.value = false
-            com.nuvio.tv.livetv.sports.SportsLaunch.dropReturn()
         }
     }
     // Full screen asked for from elsewhere (home screen row, reminders, search…).
@@ -518,10 +515,6 @@ fun LiveTvGuideScreen(
         if (!LiveTvFullscreen.pending) return@LaunchedEffect
         LiveTvFullscreen.pending = false
         fullscreenComing = true
-        // Sports: a replay asked for while the guide was already open.
-        com.nuvio.tv.livetv.sports.SportsLaunch.takeCatchup()?.let { c ->
-            viewModel.channelByKey(c.channelKey)?.let { ch -> viewModel.playCatchup(ch, c.program) }
-        }
         delay(150)
         fullscreen = true
     }
@@ -550,14 +543,6 @@ fun LiveTvGuideScreen(
     //  2. Otherwise, if something is already playing, highlight it.
     //  3. Otherwise "Resume last channel in preview" starts the last channel in the preview.
     LaunchedEffect(Unit) {
-        // Sports: "Watch from the start" on a game (a replay through the channel's catch-up).
-        com.nuvio.tv.livetv.sports.SportsLaunch.takeCatchup()?.let { c ->
-            val ch = viewModel.channelByKey(c.channelKey)
-            if (ch != null && viewModel.playCatchup(ch, c.program)) {
-                goFullscreen()
-                return@LaunchedEffect
-            }
-        }
         if (viewModel.playbackState.value.channelKey == null) viewModel.autoPlayCandidate()?.let { ch ->
             viewModel.preview(ch)
             goFullscreen()
@@ -1906,16 +1891,10 @@ fun LiveTvGuideScreen(
             LiveTvPlayerScreen(
                 onBack = {
                     fullscreenComing = false
-                    if (com.nuvio.tv.livetv.sports.SportsLaunch.takeReturnToSports()) {
-                        // Opened from the Sports page: back to the game you picked there.
-                        fullscreen = false
-                        onReturnToSports()
-                    } else {
-                        fullscreen = false; exitFullscreenTick++
-                    }
+                    fullscreen = false; exitFullscreenTick++
                 },
-                onFindInNuvio = { com.nuvio.tv.livetv.sports.SportsLaunch.clearReturn(); fullscreenComing = false; fullscreen = false; exitFullscreenTick++; onFindInNuvio() },
-                onBackToGroups = { com.nuvio.tv.livetv.sports.SportsLaunch.clearReturn(); fullscreenComing = false; fullscreen = false; savedSpot = null; exitFullscreenTick++; focusGroups() },
+                onFindInNuvio = { fullscreenComing = false; fullscreen = false; exitFullscreenTick++; onFindInNuvio() },
+                onBackToGroups = { fullscreenComing = false; fullscreen = false; savedSpot = null; exitFullscreenTick++; focusGroups() },
                 embedded = true,
                 viewModel = viewModel
             )

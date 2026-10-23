@@ -136,6 +136,7 @@ private sealed interface LiveDialog {
     data object HighlightChoice : LiveDialog
     data object CustomGroups : LiveDialog
     data object ConfirmRestore : LiveDialog
+    data object BridgeConnect : LiveDialog
     data object PinCheck : LiveDialog
     data object PinNew : LiveDialog
     data object PinRemove : LiveDialog
@@ -209,6 +210,7 @@ fun LiveTvSettingsContent(
     val accounts by viewModel.accounts.collectAsStateWithLifecycle()
     var dialog by remember { mutableStateOf<LiveDialog?>(null) }
     val drive by viewModel.driveSync.state.collectAsStateWithLifecycle()
+    val bridge by viewModel.bridgeSync.state.collectAsStateWithLifecycle()
     val developerToolsOn by com.nuvio.tv.livetv.model.DeveloperTools.enabled.collectAsStateWithLifecycle()
     val onDemandHas by viewModel.onDemand.hasContent.collectAsStateWithLifecycle()
     val onDemandStatus by viewModel.onDemand.status.collectAsStateWithLifecycle()
@@ -263,6 +265,24 @@ fun LiveTvSettingsContent(
                             "This TV stops syncing. Your backup stays in your Google Drive.",
                             "Disconnect"
                         ) { viewModel.driveSync.disconnect() }
+                    }
+                )
+            }
+
+            // ------------------------------------------------------------ Nuvio Bridge
+            item(key = "bridge") {
+                BridgeSyncCard(
+                    state = bridge,
+                    expanded = "bridge" in open,
+                    onToggleExpanded = { toggle("bridge") },
+                    onConnect = { dialog = LiveDialog.BridgeConnect },
+                    onSyncNow = { viewModel.bridgeSync.syncNowAsync() },
+                    onDisconnect = {
+                        confirm(
+                            "Disconnect Nuvio Bridge?",
+                            "Favorites stop syncing. Nothing is removed here or on the bridge.",
+                            "Disconnect"
+                        ) { viewModel.bridgeSync.disconnect() }
                     }
                 )
             }
@@ -1371,6 +1391,19 @@ fun LiveTvSettingsContent(
                 close()
             }
         )
+        LiveDialog.BridgeConnect -> SourceFormDialog(
+            title = "Connect Nuvio Bridge",
+            fields = listOf(
+                FormField("Bridge address", "http://192.168.1.10:8080", bridge.url.orEmpty()),
+                FormField("Nuvio email", "", bridge.email.orEmpty()),
+                FormField("Password", "")
+            ),
+            onDismiss = close,
+            onSave = { v, _ ->
+                if (v[0].isNotBlank() && v[1].isNotBlank() && v[2].isNotBlank()) viewModel.bridgeSync.connect(v[0], v[1], v[2])
+                close()
+            }
+        )
         LiveDialog.AddEpg -> SourceFormDialog(
             title = "Add EPG source",
             fields = listOf(FormField("Name", "Guide"), FormField("XMLTV URL", "http://…/epg.xml.gz")),
@@ -1846,6 +1879,48 @@ private fun DriveSyncCard(
                     SettingsActionRow("Restore from Google Drive", "Replace this TV's setup with the saved copy", onClick = onRestore)
                     SettingsActionRow("Disconnect", "Stop syncing on this TV (your backup stays in Drive)", onClick = onDisconnect)
                 }
+            }
+            state.message?.let {
+                Text(text = it, style = MaterialTheme.typography.bodySmall, color = NuvioTheme.colors.TextSecondary)
+            }
+        }
+    }
+}
+
+@Composable
+private fun BridgeSyncCard(
+    state: com.nuvio.tv.livetv.sync.BridgeSyncState,
+    expanded: Boolean,
+    onToggleExpanded: () -> Unit,
+    onConnect: () -> Unit,
+    onSyncNow: () -> Unit,
+    onDisconnect: () -> Unit
+) {
+    val status = when {
+        !state.connected -> "Off"
+        state.busy -> "Syncing…"
+        state.lastSyncMs > 0 -> "On · last synced " + DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(state.lastSyncMs))
+        else -> "On"
+    }
+    LiveSection(
+        title = "Nuvio Bridge",
+        summary = "Favorites sync · " + status,
+        icon = Icons.Default.Backup,
+        open = expanded,
+        onToggle = onToggleExpanded
+    ) {
+        run {
+            if (!state.connected) {
+                Text(
+                    text = "Keeps your Live TV favorites the same here and on your Nuvio Bridge server, both ways. Channels are matched by name, so add the same provider on the bridge.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = NuvioTheme.colors.TextSecondary
+                )
+                SettingsActionRow("Connect Nuvio Bridge", "Sign in with your bridge address and Nuvio account", onClick = onConnect)
+            } else {
+                SettingsActionRow("Bridge", state.email ?: "Connected", state.url ?: "", onClick = {})
+                SettingsActionRow("Sync Now", "Favorites also sync on their own whenever they change", onClick = onSyncNow)
+                SettingsActionRow("Disconnect", "Stop syncing favorites on this TV", onClick = onDisconnect)
             }
             state.message?.let {
                 Text(text = it, style = MaterialTheme.typography.bodySmall, color = NuvioTheme.colors.TextSecondary)

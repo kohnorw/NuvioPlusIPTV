@@ -270,7 +270,7 @@ fun GridContentCard(
                         val logoRequest = remember(item.logo) {
                             ImageRequest.Builder(context)
                                 .data(item.logo)
-                                .crossfade(true)
+                                .crossfade(120)
                                 .build()
                         }
                         AsyncImage(
@@ -331,7 +331,7 @@ fun GridContentCard(
                     val logoRequest = remember(item.logo) {
                         ImageRequest.Builder(context)
                             .data(item.logo)
-                            .crossfade(true)
+                            .crossfade(120)
                             .build()
                     }
                     AsyncImage(

@@ -81,6 +81,7 @@ class LiveTvViewModel @Inject constructor(
     private val matcher247: com.nuvio.tv.livetv.data.LiveTv247Matcher,
     layoutPrefs: com.nuvio.tv.data.local.LayoutPreferenceDataStore,
     driveSync: com.nuvio.tv.livetv.sync.LiveTvDriveSync,
+    bridgeSync: com.nuvio.tv.livetv.sync.LiveTvBridgeSync,
     val recorder: com.nuvio.tv.livetv.record.LiveTvRecorder,
     val scheduler: com.nuvio.tv.livetv.record.LiveTvRecordingScheduler
 ) : ViewModel() {
@@ -88,6 +89,7 @@ class LiveTvViewModel @Inject constructor(
     init {
         // Google Drive sync (if connected): pick up a newer setup from another TV.
         driveSync.start()
+        bridgeSync.start()
     }
 
 

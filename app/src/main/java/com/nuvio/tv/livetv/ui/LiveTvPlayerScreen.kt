@@ -6,9 +6,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.heightIn
@@ -697,19 +695,6 @@ fun LiveTvPlayerScreen(
                     browsing = true
                 )
             }
-        }
-        // Sports: the game card in the top right corner while the full panel is up (OK).
-        AnimatedVisibility(
-            visible = panelFull && current != null && playback.catchupTitle == null && !listVisible,
-            enter = slideInHorizontally { it } + fadeIn(),
-            exit = slideOutHorizontally { it } + fadeOut(),
-            modifier = Modifier.align(Alignment.TopEnd)
-        ) {
-            com.nuvio.tv.livetv.sports.SportsCornerCard(
-                channelKey = current?.key,
-                use24h = settings.use24HourClock,
-                modifier = Modifier.padding(top = 28.dp, end = 36.dp)
-            )
         }
         AnimatedVisibility(
             visible = (bannerVisible || panelFull || pausedNow) && current != null && (browseKey == null || panelFull),

@@ -2,7 +2,7 @@
 
 # Nuvio + IPTV
 
-**Everything in Nuvio, plus everything IPTV: a TiviMate-style Live TV guide, a Sports hub that finds every game on your own channels, catch-up, recordings, and your provider's movies and series, all in one app for Google TV, Android TV and Fire TV.**
+**Everything in Nuvio, plus everything IPTV: a TiviMate-style Live TV guide, catch-up, recordings, and your provider's movies and series, all in one app for Google TV, Android TV and Fire TV.**
 
 [![Latest release](https://img.shields.io/github/v/release/homelessbrian/NuvioPlusIPTV?include_prereleases&label=latest&style=for-the-badge)](https://github.com/homelessbrian/NuvioPlusIPTV/releases)
 [![Downloads](https://img.shields.io/github/downloads/homelessbrian/NuvioPlusIPTV/total?style=for-the-badge)](https://github.com/homelessbrian/NuvioPlusIPTV/releases)
@@ -12,79 +12,21 @@
 
 **Downloader code: 6532491**
 
-[Sports hub](#-sports-hub) · [Download](#-installation) · [Features](#-features) · [Setup](#-getting-started) · [Remote controls](CONTROLS.md) · [Report a bug](#-reporting-bugs-and-requesting-features) · [Support](#-support-the-project)
+[Download](#-installation) · [Features](#-features) · [Setup](#-getting-started) · [Remote controls](CONTROLS.md) · [Report a bug](#-reporting-bugs-and-requesting-features) · [Support](#-support-the-project)
 
 </div>
 
 ---
 
-## 🏆 Sports hub
+## 🔄 Nuvio Bridge favorites sync
 
-Sports in the side menu shows scores and schedules, and works out **which of your own channels are showing each game**. No more scrolling through sports channels to find the match.
+This fork has no Sports section (lighter and quicker), and syncs Live TV favorites with a
+[Nuvio Bridge](https://github.com/kohnorw/nuvio-bridge) server, both ways.
 
-### Your teams, front and center
-- **My Sports:**
-  - **The big card:** your next games in your teams' colors. Left and Right flip through them.
-  - **Live & Upcoming,** then a row for every team, country, league and name you follow.
-  - **Your order:** arrange the rows how you like.
-- **All Events:** every game in your region's leagues plus everything you follow, with a live count. **Day tabs** run from a week back to a week ahead.
-- **Follow anything:**
-  - **Teams, countries, whole leagues,** or a **name** (a player, driver or fighter) to catch any show that mentions it.
-  - **One search** finds teams and leagues alike.
-  - **Following a club includes its cups** and European games.
-- **Where they stand:** each team's row on My Sports says where it is in its league ("2nd in Premier League").
-
-### 🏆 Tables
-- **🏆 Tables** in the Sports top bar: your leagues across the top, the table below, opened on your team. The video keeps playing beside it.
-- **Football:** played, won, drawn, lost, goal difference and points, the **last five** as coloured squares, **▲ / ▼ place changes** since the last round, and coloured edges for **Champions League, Europa League and relegation** places.
-- **US sports:** **Division / Conference / League** views, clinched marks (x, y, z, e) and **playoff lines** (Play-In too for the NBA).
-- **Racing:** F1, NASCAR and IndyCar drivers' standings, with points behind the leader.
-- **Team colours** on every row, and your team outlined in gold.
-- **Team cards:** OK on a team for its record, home and away form, last three results, next game, **Watch now** (or Remind me), **Follow**, and **all its games**.
-- **From a game:** OK on a game's Table panel opens the whole table with both teams marked.
-
-### 160+ leagues and competitions
-- **US sports:** NFL, NBA, NHL, MLB, WNBA, MLS, college football, basketball, hockey and baseball, plus CFL, UFL and G League.
-- **Football (soccer):**
-  - **The UK:** Premier League down to the National League, the FA Cup, Carabao Cup, Scottish leagues and cups, and the WSL.
-  - **Europe:** the Champions League, Europa League, LaLiga, Serie A, Bundesliga, Ligue 1, Eredivisie, Primeira Liga, and their cups.
-  - **Further afield:** the Libertadores, Brazil, Argentina, the Saudi Pro League, J1, the A-League and more.
-- **National teams:** follow England, France, USA and others for every game, from friendlies to the World Cup. Women's internationals have their own list.
-- **Rugby:** the Six Nations, Nations Championship, Rugby Championship, World Cup, Premiership, URC, Champions Cup, Top 14 and Super Rugby. **AFL** too.
-- **Events:** UFC, PFL, F1, NASCAR, IndyCar, PGA Tour, DP World Tour, LPGA, LIV, and ATP and WTA tennis, with leaderboards, results and full fight cards.
-- **Beyond ESPN:** from TheSportsDB, with scores about every 15 minutes on match days:
-  - **non-league football:** the National League and the step below
-  - **rugby league:** Super League, NRL and State of Origin
-  - **cricket:** T20 Blast, IPL and Big Bash
-  - **ice hockey:** the Elite Ice Hockey League
-  - **Gaelic games:** the National Football League
-  - **netball:** the UK Netball Superleague and Super Netball
-- **Wrestling and boxing schedules.** WWE and AEW shows are matched to your channels by show name.
-- **Your TV guide fills the gaps:** darts, snooker, horse racing, cycling and cricket internationals are found in your own guide.
-
-### Watching
-- **Watch on your channels:**
-  - **Every channel showing the game,** best match first, with the playlist it comes from.
-  - **Labels:** each channel is marked **SHOWING IT** or **MAYBE**.
-- **Fix Channel:** pick the right channel once, for one game, every game on that network, or every game for a team. It's remembered.
-- **Video window:** hold OK on a game to watch it on the Sports page while you keep browsing. Hold Back for full screen.
-- **Watch from the start** on channels with catch-up.
-- **Game pages:**
-  - the score by period, and the latest scoring as it happens
-  - **before it starts:** form, the last meetings, match info, win chance and the table
-  - **once it's on:** team stats, top performers or line-ups, and win chance as it changes
-  - race and golf leaderboards, tennis matches and fight cards
-  - **Up to a team** and OK for its team card
-- **Scores everywhere:**
-  - the score shows on Live TV's info bar when you're watching a game
-  - **scoring alerts** pop up in the corner when your team scores, wherever you are in the app
-- **Spoiler-free:** **Hide Scores** keeps results off the screen until you're ready.
-
-### Never miss it
-- **Remind me** on any game, and automatic reminders for your teams.
-- **Switch automatically:** a minute before kick-off, with 10 seconds to cancel.
-- **Record a game:** pick the channel and how long to record (1 to 6 hours, for overtime and extra time). Games set to record show **REC**.
-- **On every TV:** your teams, leagues and Sports settings sync with Google Drive.
+**Settings → Live TV → Nuvio Bridge → Connect**, then enter the bridge address
+(`http://<server>:8080`) and your Nuvio email and password. Only the session cookie is kept
+on the TV. Channels are matched by name, so add the same provider on the bridge. Favorites
+sync when Live TV opens, a few seconds after you change one, and every 15 minutes.
 
 ---
 

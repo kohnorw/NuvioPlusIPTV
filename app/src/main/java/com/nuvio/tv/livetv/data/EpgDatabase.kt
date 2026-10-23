@@ -263,50 +263,6 @@ class EpgDatabase @Inject constructor(@ApplicationContext context: Context) :
         return out
     }
 
-    /**
-     * Sports: listings starting in [fromMs, toMs) and still on at [minStopMs] whose title (or, with
-     * [inDescription], description) contains any of [words], ignoring case. Channel key -> show.
-     * Asked in parts so a busy day's team names never go over SQLite's limit on placeholders.
-     */
-    fun findByWords(
-        fromMs: Long,
-        toMs: Long,
-        minStopMs: Long,
-        words: Collection<String>,
-        inDescription: Boolean = true,
-        limit: Int = 4_000
-    ): List<Pair<String, EpgProgram>> {
-        val clean = words.map { it.trim() }.filter { it.length >= 3 }.distinct()
-        if (clean.isEmpty()) return emptyList()
-        val out = ArrayList<Pair<String, EpgProgram>>()
-        val seen = HashSet<String>()
-        fun like(w: String) = "%" + w.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
-        clean.chunked(if (inDescription) 180 else 360).forEach { part ->
-            if (out.size >= limit) return@forEach
-            val conds = part.flatMap { w ->
-                if (inDescription) listOf("title LIKE ? ESCAPE '\\'", "descr LIKE ? ESCAPE '\\'") else listOf("title LIKE ? ESCAPE '\\'")
-            }.joinToString(" OR ")
-            val args = listOf(fromMs.toString(), toMs.toString(), minStopMs.toString()) +
-                part.flatMap { w -> if (inDescription) listOf(like(w), like(w)) else listOf(like(w)) }
-            val sql = "SELECT ch, start, stop, title, descr, cat FROM programs WHERE start >= ? AND start < ? AND stop > ? AND ($conds) LIMIT ${limit - out.size}"
-            readableDatabase.rawQuery(sql, args.toTypedArray()).use { c ->
-                while (c.moveToNext()) {
-                    val ch = c.getString(0)
-                    val start = c.getLong(1)
-                    if (!seen.add("$ch|$start")) continue
-                    out += ch to EpgProgram(
-                        startMs = start,
-                        stopMs = c.getLong(2),
-                        title = c.getString(3),
-                        description = if (c.isNull(4)) null else c.getString(4),
-                        category = if (c.isNull(5)) null else c.getString(5)
-                    )
-                }
-            }
-        }
-        return out
-    }
-
     /** One show's full details (description, cast…), for the show you're looking at. */
     fun program(ch: String, startMs: Long): EpgProgram? =
         range(startMs, startMs + 1, onlyChannel = ch)[ch]?.firstOrNull { it.startMs == startMs }

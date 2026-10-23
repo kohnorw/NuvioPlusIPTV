@@ -17,7 +17,7 @@ object BackgroundWork {
 
     /**
      * Two low-priority threads for work nobody is waiting on: automatic playlist and guide
-     * updates, and finding channels for Sports games when the Sports page isn't open. Android
+     * updates and the like. Android
      * gives the screen and the video first claim on the processor over these, so on a slower box
      * scrolling and playback stay smooth while they run (they just take a little longer).
      */

@@ -225,8 +225,6 @@ internal fun LiveTvPlayerPanel(
                     LiveTag("CATCH-UP", Color.Transparent, colors.TextSecondary,
                         Modifier.border(1.dp, colors.Border, RoundedCornerShape(5.dp)))
                 }
-                // Sports: the live score of the game on this channel.
-                if (mode == PanelMode.LIVE) com.nuvio.tv.livetv.sports.SportsScoreTag(channel.key)
                 Spacer(Modifier.weight(1f))
                 if (full) timeline?.let {
                     LiveText(it.status, size = 13.sp, color = if (it.statusLive) colors.Error else accent, modifier = Modifier.padding(end = 14.dp))
@@ -649,7 +647,6 @@ private fun FullInfoPanel(
                         LiveTag("CATCH-UP", Color.Transparent, colors.TextSecondary,
                             Modifier.border(1.dp, colors.Border, RoundedCornerShape(5.dp)))
                     }
-                    if (mode == PanelMode.LIVE) com.nuvio.tv.livetv.sports.SportsScoreTag(channel.key)
                     Spacer(Modifier.weight(1f))
                     // Time left / how far behind live: up here, so the time bar keeps its length.
                     timeline?.let {

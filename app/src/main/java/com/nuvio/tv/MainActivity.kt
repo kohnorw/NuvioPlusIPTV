@@ -51,7 +51,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LiveTv
-import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.filled.GridView
@@ -312,9 +311,6 @@ open class MainActivity : ComponentActivity() {
 
     @Inject
     lateinit var liveTvRecordingScheduler: com.nuvio.tv.livetv.record.LiveTvRecordingScheduler
-
-    @Inject
-    lateinit var sportsRepository: com.nuvio.tv.livetv.sports.SportsRepository
 
     @Inject
     lateinit var layoutPreferenceDataStore: LayoutPreferenceDataStore
@@ -1114,8 +1110,6 @@ open class MainActivity : ComponentActivity() {
                     val recordingNow = allRecordings.any {
                         it.status == com.nuvio.tv.livetv.record.RecordingStatus.RECORDING
                     }
-                    // Live TV fork: the Sports page (on unless switched off in Sports settings).
-                    val sportsInSidebar = sportsRepository.settings.collectAsState().value.showInSidebar
                     // (The Live TV sub-list is gone: every page is in the one menu again. These stay
                     // so the menus' wiring is unchanged; nothing opens a sub-list any more.)
                     var liveTvGroupOpen by remember { mutableStateOf(false) }
@@ -1129,7 +1123,6 @@ open class MainActivity : ComponentActivity() {
                             // checked or updated; only its menu entry depends on having content.
                             add(Screen.OnDemand.route)
                             add(Screen.Recordings.route)
-                            add(Screen.Sports.route)
                             add(Screen.Search.route)
                             add(Screen.Library.route)
                             add(Screen.Settings.route)
@@ -1156,8 +1149,7 @@ open class MainActivity : ComponentActivity() {
                         liveTvInSidebar,
                         onDemandInSidebar,
                         recordingsInSidebar,
-                        recordingNow,
-                        sportsInSidebar
+                        recordingNow
                     ) {
                         buildList {
                             add(
@@ -1193,9 +1185,6 @@ open class MainActivity : ComponentActivity() {
                             val liveTvPages = buildList {
                                 if (liveTvInSidebar) {
                                     add(DrawerItem(route = Screen.LiveTv.route, label = "Live TV", icon = Icons.Default.LiveTv))
-                                }
-                                if (sportsInSidebar) {
-                                    add(DrawerItem(route = Screen.Sports.route, label = "Sports", icon = Icons.Default.EmojiEvents))
                                 }
                                 if (onDemandInSidebar) {
                                     add(DrawerItem(route = Screen.OnDemand.route, label = "On Demand", icon = Icons.Default.VideoLibrary))
@@ -1879,10 +1868,8 @@ private fun LegacySidebarScaffold(
                             showSidebar &&
                             drawerState.currentValue == DrawerValue.Closed &&
                             currentRoute in rootRoutes &&
-                            // Live TV fork: in the guide and on Sports, holding Back returns to
-                            // full screen (Sports opens the menu itself when nothing's playing).
+                            // Live TV fork: in the guide, holding Back returns to full screen.
                             currentRoute != Screen.LiveTv.route &&
-                            currentRoute != Screen.Sports.route &&
                             keyEvent.nativeKeyEvent.isLongPress
                         ) {
                             if (!longPressBackHeld.value) {
@@ -2328,10 +2315,8 @@ private fun ModernSidebarScaffold(
                             !isSidebarExpanded &&
                             !sidebarCollapsePending &&
                             currentRoute in rootRoutes &&
-                            // Live TV fork: in the guide and on Sports, holding Back returns to
-                            // full screen (Sports opens the menu itself when nothing's playing).
+                            // Live TV fork: in the guide, holding Back returns to full screen.
                             currentRoute != Screen.LiveTv.route &&
-                            currentRoute != Screen.Sports.route &&
                             keyEvent.nativeKeyEvent.isLongPress
                         ) {
                             if (!longPressBackHeld.value) {
