@@ -324,6 +324,9 @@ open class MainActivity : ComponentActivity() {
     lateinit var startupSyncService: StartupSyncService
 
     @Inject
+    lateinit var liveTvBridgeSync: com.nuvio.tv.livetv.sync.LiveTvBridgeSync
+
+    @Inject
     lateinit var androidTvChannelSyncService: com.nuvio.tv.core.sync.androidtv.AndroidTvChannelSyncService
 
     @Inject
@@ -442,6 +445,8 @@ open class MainActivity : ComponentActivity() {
             var focusedSplashCacheKey by remember { mutableStateOf<String?>(null) }
             var focusedSplashTheme by remember { mutableStateOf<AppTheme?>(null) }
             var onboardingCompletedThisSession by remember { mutableStateOf(false) }
+            // Live TV fork: the one-time "Syncing" step with Nuvio Bridge after signing in.
+            var bridgeFirstSyncDone by remember { mutableStateOf(false) }
             var onboardingProfileSyncInProgress by remember { mutableStateOf(false) }
             val hasSeenAuthQrFlow = remember(appOnboardingDataStore) {
                 appOnboardingDataStore.hasSeenAuthQrOnFirstLaunch.map<Boolean, Boolean?> { it }
@@ -853,6 +858,19 @@ open class MainActivity : ComponentActivity() {
                                     startupSyncService.requestSyncNow()
                                 }
                             }
+                        )
+                    } else if (
+                        !bridgeFirstSyncDone &&
+                        authState is AuthState.FullAccount &&
+                        liveTvBridgeSync.needsFirstSync()
+                    ) {
+                        // Live TV fork: first time this account is used here: bring over its IPTV
+                        // playlists and favorites from Nuvio Bridge before Home. (Setup: the
+                        // startup splash doesn't cover it.)
+                        startupDestination = StartupDestination.Setup
+                        com.nuvio.tv.livetv.sync.BridgeSyncScreen(
+                            sync = liveTvBridgeSync,
+                            onDone = { bridgeFirstSyncDone = true }
                         )
                     } else {
 

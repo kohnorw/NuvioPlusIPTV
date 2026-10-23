@@ -97,7 +97,9 @@ class LiveTvBridgeSync @Inject constructor(
         started = true
         scope.launch {
             // Wait for the channel list: matching needs names.
-            kotlinx.coroutines.withTimeoutOrNull(60_000) { repository.channels.first { it.isNotEmpty() } }
+            if (prefs.playlists.first().isNotEmpty()) {
+                kotlinx.coroutines.withTimeoutOrNull(30_000) { repository.channels.first { it.isNotEmpty() } }
+            }
             syncNow()
         }
         scope.launch {
@@ -110,6 +112,11 @@ class LiveTvBridgeSync @Inject constructor(
                 .distinctUntilChanged().drop(1).debounce(3_000).collect {
                     if (!applying) syncNow()
                 }
+        }
+        scope.launch {
+            repository.channels.map { it.size }.distinctUntilChanged().drop(1).debounce(5_000).collect { n ->
+                if (n > 0 && !applying) syncNow()
+            }
         }
         scope.launch {
             while (isActive) {
@@ -133,6 +140,81 @@ class LiveTvBridgeSync @Inject constructor(
     }
 
     fun syncNowAsync() { scope.launch { syncNow() } }
+
+    /** A client that gives up fast, for the sync behind the "Syncing" screen after sign-in. */
+    private val fastHttp: OkHttpClient by lazy {
+        http.newBuilder().connectTimeout(4, TimeUnit.SECONDS).callTimeout(6, TimeUnit.SECONDS).build()
+    }
+
+    private fun firstKey(): String? = runCatching { auth.currentUserOrNull()?.id }.getOrNull()?.let { "first_done_$it" }
+
+    /** True right after signing in to an account this TV hasn't synced with the bridge yet. */
+    fun needsFirstSync(): Boolean {
+        if (!store.getBoolean(KEY_ON, true) || token() == null) return false
+        val key = firstKey() ?: return false
+        return !store.getBoolean(key, false)
+    }
+
+    /** How the first sync ended, for the "Syncing" screen. */
+    enum class FirstSyncResult { DONE, NO_IPTV, FAILED }
+
+    /**
+     * The first sync for this account, shown as "Syncing" before Home. Brings over the bridge's
+     * playlists (and sends this TV's), waits for the channels to load, then syncs favorites.
+     * [onStage] reports what's happening and roughly how far along (0..1).
+     *
+     * No playlists on either side: returns NO_IPTV straight away. The bridge can't be reached:
+     * FAILED within a few seconds. Channels slow to load: gives up waiting after
+     * [channelWaitMs] and favorites follow in the background once they're in.
+     */
+    suspend fun firstSync(
+        channelWaitMs: Long = 45_000L,
+        onStage: (String, Float) -> Unit = { _, _ -> }
+    ): FirstSyncResult {
+        val key = firstKey()
+        val sid = token()
+        val result = if (sid == null) FirstSyncResult.FAILED else kotlinx.coroutines.withContext(Dispatchers.IO) {
+            onStage("Getting your Live TV playlists", 0.15f)
+            val sources = kotlinx.coroutines.withTimeoutOrNull(8_000L) {
+                runCatching { mutex.withLock { syncSources(BRIDGE_URL, sid, fastHttp) } }
+                    .onFailure { Log.w(TAG, "First bridge sync failed", it) }
+                    .isSuccess
+            } ?: false
+            when {
+                !sources -> FirstSyncResult.FAILED
+                prefs.playlists.first().isEmpty() -> FirstSyncResult.NO_IPTV
+                else -> {
+                    onStage("Loading channels", 0.4f)
+                    repository.ensureLoaded()
+                    val loaded = kotlinx.coroutines.withTimeoutOrNull(channelWaitMs) {
+                        repository.channels.first { it.isNotEmpty() }
+                        // Let a big playlist finish (the list grows while it's read).
+                        var last = -1
+                        while (repository.channels.value.size != last) {
+                            last = repository.channels.value.size
+                            delay(1_500)
+                        }
+                    } != null
+                    if (loaded) {
+                        onStage("Syncing favorites", 0.85f)
+                        kotlinx.coroutines.withTimeoutOrNull(10_000L) {
+                            runCatching { mutex.withLock { sync(BRIDGE_URL, sid) } }
+                                .onFailure { Log.w(TAG, "First favorites sync failed", it) }
+                        }
+                    }
+                    FirstSyncResult.DONE
+                }
+            }
+        }
+        // Asked once per account: if the bridge was down, the background sync tries again.
+        key?.let { store.edit().putBoolean(it, true).apply() }
+        if (result != FirstSyncResult.FAILED) {
+            store.edit().putLong(KEY_LAST_SYNC, System.currentTimeMillis()).apply()
+            _state.value = load().copy(message = "Up to date")
+        }
+        start()
+        return result
+    }
 
     private suspend fun syncNow() {
         if (!store.getBoolean(KEY_ON, true)) return
@@ -164,8 +246,8 @@ class LiveTvBridgeSync @Inject constructor(
      * either side is added to the other, one removed on either side is removed from the other.
      * The same playlist is recognised by server + username (Xtream) or link (M3U).
      */
-    private suspend fun syncSources(base: String, sid: String): Int {
-        val remote = getJson(base, sid, "/api/iptv/sources/export").optJSONArray("sources") ?: JSONArray()
+    private suspend fun syncSources(base: String, sid: String, client: OkHttpClient = http): Int {
+        val remote = getJson(base, sid, "/api/iptv/sources/export", client).optJSONArray("sources") ?: JSONArray()
         val remoteById = LinkedHashMap<String, JSONObject>()
         for (i in 0 until remote.length()) {
             val o = remote.optJSONObject(i) ?: continue
@@ -201,39 +283,39 @@ class LiveTvBridgeSync @Inject constructor(
                 changed++
             }
             // The bridge
-            for ((id, o) in remoteById) if (id !in result) { deleteRemote(base, sid, o.optString("id")); changed++ }
+            for ((id, o) in remoteById) if (id !in result) { deleteRemote(base, sid, o.optString("id"), client); changed++ }
             for (id in result) {
                 if (id in remoteById) continue
                 val p = localById[id] ?: continue
                 if (p.isXtream) {
-                    postJson(base, sid, "/api/iptv/xtream", JSONObject()
+                    postJson(client, base, sid, "/api/iptv/xtream", JSONObject()
                         .put("name", p.name).put("server", p.xtreamServer)
                         .put("username", p.xtreamUsername).put("password", p.xtreamPassword)
                         .put("userAgent", p.userAgent).put("importLive", p.importLive))
                 } else {
-                    postJson(base, sid, "/api/iptv/m3u", JSONObject()
+                    postJson(client, base, sid, "/api/iptv/m3u", JSONObject()
                         .put("name", p.name).put("url", p.url).put("userAgent", p.userAgent))
                 }
                 changed++
             }
         } finally {
-            if (changed > 0) delay(3_500) // past the change listeners' debounce
-            applying = false
+            // Past the change listeners' debounce, without holding up the sync.
+            if (changed > 0) scope.launch { delay(3_500); applying = false } else applying = false
         }
         store.edit().putStringSet(KEY_LAST_SOURCES, HashSet(result)).apply()
         return changed
     }
 
-    private fun postJson(base: String, sid: String, path: String, body: JSONObject) {
+    private fun postJson(client: OkHttpClient, base: String, sid: String, path: String, body: JSONObject) {
         val req = Request.Builder().url(base + path).header("Authorization", "Bearer $sid")
             .post(body.toString().toRequestBody(json)).build()
-        http.newCall(req).execute().use { res -> check(res) }
+        client.newCall(req).execute().use { res -> check(res) }
     }
 
-    private fun deleteRemote(base: String, sid: String, id: String) {
+    private fun deleteRemote(base: String, sid: String, id: String, client: OkHttpClient = http) {
         if (id.isBlank()) return
         val req = Request.Builder().url("$base/api/iptv/sources/$id").header("Authorization", "Bearer $sid").delete().build()
-        http.newCall(req).execute().use { res -> check(res) }
+        client.newCall(req).execute().use { res -> check(res) }
     }
 
     /** One full two-way merge. Returns how many favorites changed on either side. */
@@ -294,8 +376,8 @@ class LiveTvBridgeSync @Inject constructor(
             try {
                 prefs.replaceFavorites(newAppKeys)
             } finally {
-                delay(3_500) // past the change listener's debounce
-                applying = false
+                // Past the change listener's debounce, without holding up the sync.
+                scope.launch { delay(3_500); applying = false }
             }
         }
 
@@ -323,9 +405,9 @@ class LiveTvBridgeSync @Inject constructor(
         http.newCall(req).execute().use { res -> check(res) }
     }
 
-    private fun getJson(base: String, sid: String, path: String): JSONObject {
+    private fun getJson(base: String, sid: String, path: String, client: OkHttpClient = http): JSONObject {
         val req = Request.Builder().url(base + path).header("Authorization", "Bearer $sid").get().build()
-        return http.newCall(req).execute().use { res ->
+        return client.newCall(req).execute().use { res ->
             check(res)
             JSONObject(res.body?.string().orEmpty())
         }
