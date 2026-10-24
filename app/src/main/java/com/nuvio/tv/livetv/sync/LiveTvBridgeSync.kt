@@ -128,14 +128,14 @@ class LiveTvBridgeSync @Inject constructor(
 
     /** Turns syncing on again (it's on by default). */
     fun connect() {
-        store.edit().putBoolean(KEY_ON, true).remove(KEY_LAST_SET).remove(KEY_LAST_SOURCES).apply()
+        store.edit().putBoolean(KEY_ON, true).remove(KEY_LAST_SET).remove(KEY_LAST_SOURCES).remove(KEY_LAST_ORDER).apply()
         _state.value = load().copy(message = "On")
         start()
         syncNowAsync()
     }
 
     fun disconnect() {
-        store.edit().putBoolean(KEY_ON, false).remove(KEY_LAST_SET).remove(KEY_LAST_SOURCES).apply()
+        store.edit().putBoolean(KEY_ON, false).remove(KEY_LAST_SET).remove(KEY_LAST_SOURCES).remove(KEY_LAST_ORDER).apply()
         _state.value = load().copy(message = "Off")
     }
 
@@ -392,10 +392,45 @@ class LiveTvBridgeSync @Inject constructor(
             toggleRemote(base, sid, k); changed++
         }
 
+        // ---- order: whichever side was rearranged since last time wins (this TV if both were)
+        val common = result.filter { it in appNameToKey && it in remoteNameToKey }.toSet()
+        val appOrder = newAppKeys.mapNotNull { appKeyToName[it] }.filter { it in result }.distinct()
+        val remoteOrder = (remoteFavKeys.mapNotNull { remoteKeyToName[it] }.filter { it in result } +
+            result.filter { it !in b }).distinct()
+        val lastOrder = store.getString(KEY_LAST_ORDER, null)?.split('\n')?.filter { it.isNotEmpty() }
+        fun List<String>.inCommon() = filter { it in common }
+        val appMoved = lastOrder != null && appOrder.inCommon() != lastOrder.inCommon()
+        val remoteMoved = lastOrder != null && remoteOrder.inCommon() != lastOrder.inCommon()
+        val useRemote = when {
+            lastOrder == null -> appFavKeys.isEmpty() && remoteOrder.isNotEmpty() // first sync: an empty TV takes the bridge's order
+            else -> remoteMoved && !appMoved
+        }
+        val order = if (useRemote) (remoteOrder + appOrder).distinct() else (appOrder + remoteOrder).distinct()
+        if (appOrder.inCommon() != order.inCommon() || appOrder != order.filter { it in appOrder }) {
+            val keyFor = HashMap<String, String>()
+            newAppKeys.forEach { k -> appKeyToName[k]?.let { keyFor.putIfAbsent(it, k) } }
+            val keys = order.mapNotNull { keyFor[it] }
+            if (keys.isNotEmpty()) {
+                applying = true
+                try { prefs.setFavoritesOrder(keys) } finally { scope.launch { delay(3_500); applying = false } }
+                changed++
+            }
+        }
+        if (remoteOrder.inCommon() != order.inCommon()) {
+            val keys = order.mapNotNull { remoteNameToKey[it] }
+            if (keys.isNotEmpty()) {
+                postJson(http, base, sid, "/api/iptv/favorite/order", JSONObject().put("keys", JSONArray(keys)))
+                changed++
+            }
+        }
+
         // Remember only favorites both sides can show. One whose channel was missing on a side
         // (a playlist still loading, or not added there yet) then counts as new next time, so
         // it's copied over instead of being taken for a removal.
-        store.edit().putStringSet(KEY_LAST_SET, HashSet(result.filter { it in appNameToKey && it in remoteNameToKey })).apply()
+        store.edit()
+            .putStringSet(KEY_LAST_SET, HashSet(common))
+            .putString(KEY_LAST_ORDER, order.inCommon().joinToString("\n"))
+            .apply()
         return changed
     }
 
@@ -425,6 +460,7 @@ class LiveTvBridgeSync @Inject constructor(
         private const val KEY_LAST_SYNC = "last_sync"
         private const val KEY_LAST_SET = "last_set"
         private const val KEY_LAST_SOURCES = "last_sources"
+        private const val KEY_LAST_ORDER = "last_order"
 
         /** The same playlist on both sides: Xtream server (no scheme or default port) + username, or the M3U link. */
         fun sourceId(xtream: Boolean, server: String?, username: String?, url: String?): String {
