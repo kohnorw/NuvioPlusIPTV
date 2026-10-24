@@ -138,10 +138,11 @@ val AVAILABLE_TMDB_LANGUAGES = AVAILABLE_SUBTITLE_LANGUAGES + listOf(
  * Data class representing subtitle style settings
  */
 data class SubtitleStyleSettings(
-    val preferredLanguage: String = "en",
-    val isPreferredLanguageSystemDefault: Boolean = true,
+    // Live TV fork: subtitles are off until you pick a language.
+    val preferredLanguage: String = "none",
+    val isPreferredLanguageSystemDefault: Boolean = false,
     val secondaryPreferredLanguage: String? = null,
-    val useForcedSubtitles: Boolean = true,
+    val useForcedSubtitles: Boolean = false,
     val showOnlyPreferredLanguages: Boolean = false,
     val stripSdh: Boolean = true,
     val size: Int = 120, // Percentage (50-200)
@@ -1572,7 +1573,9 @@ class PlayerSettingsDataStore @Inject constructor(
         secondaryLanguage: String?
     ): ResolvedSubtitlePreferredLanguage {
         val preferred = preferredLanguage?.let(::normalizeSelectableLanguageCode)
-        if (preferred == null || preferred == SubtitleLanguageOption.DEVICE) {
+            // Live TV fork: nothing chosen yet means subtitles off.
+            ?: return ResolvedSubtitlePreferredLanguage("none", isSystemDefault = false)
+        if (preferred == SubtitleLanguageOption.DEVICE) {
             return ResolvedSubtitlePreferredLanguage(resolveDeviceSubtitleLanguage(), isSystemDefault = true)
         }
         if (preferred != SUBTITLE_LANGUAGE_FORCED) {
