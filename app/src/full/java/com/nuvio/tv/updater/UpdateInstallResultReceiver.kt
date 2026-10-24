@@ -28,7 +28,7 @@ class UpdateInstallResultReceiver : BroadcastReceiver() {
         Log.i(TAG, "Session $sessionId status=$status background=$background dm=$withDexMetadata message=$message")
 
         when (status) {
-            PackageInstaller.STATUS_SUCCESS -> Unit
+            PackageInstaller.STATUS_SUCCESS -> ApkInstaller.abandonStaleSessions(context)
             PackageInstaller.STATUS_PENDING_USER_ACTION -> {
                 if (background) {
                     runCatching { context.packageManager.packageInstaller.abandonSession(sessionId) }

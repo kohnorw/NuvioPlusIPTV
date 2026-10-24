@@ -54,6 +54,8 @@ class UpdateViewModel @Inject constructor(
     private var updateCheckJob: Job? = null
 
     init {
+        // Clears the stuck progress bar a half-finished update leaves on the Google TV tile.
+        ApkInstaller.abandonStaleSessions(context)
         viewModelScope.launch {
             val enabled = updatePreferences.updateBannerEnabled.first()
             val channel = updatePreferences.getOrInitializeUpdateChannel()

@@ -78,6 +78,22 @@ object ApkInstaller {
         }
     }
 
+    /**
+     * Abandons this app's own install sessions left over from an earlier update: one waiting on a
+     * confirmation that never showed, or a failed first try. Google TV draws a progress bar on the
+     * app's tile while any of them is open, and it stays stuck there after the update is in.
+     * Never touches a session that's installing right now.
+     */
+    fun abandonStaleSessions(context: Context) {
+        val installer = context.packageManager.packageInstaller
+        runCatching {
+            installer.mySessions
+                .filter { it.appPackageName == null || it.appPackageName == context.packageName }
+                .filter { !it.isActive }
+                .forEach { info -> runCatching { installer.abandonSession(info.sessionId) } }
+        }
+    }
+
     /** Hands the APK to the system installer screen, used when the session install cannot be completed. */
     fun launchSystemInstaller(context: Context, apkFile: File) {
         val authority = "${BuildConfig.APPLICATION_ID}.fileprovider"
