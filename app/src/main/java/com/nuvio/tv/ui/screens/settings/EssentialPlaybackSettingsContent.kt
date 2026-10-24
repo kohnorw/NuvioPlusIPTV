@@ -67,7 +67,7 @@ fun EssentialPlaybackSettingsContent(
                             null -> ""
                         },
                         onClick = {
-                            val current = settings?.streamAutoPlayMode ?: StreamAutoPlayMode.MANUAL
+                            val current = settings?.streamAutoPlayMode ?: StreamAutoPlayMode.FIRST_STREAM
                             val next = if (current == StreamAutoPlayMode.MANUAL) {
                                 StreamAutoPlayMode.FIRST_STREAM
                             } else {
