@@ -251,6 +251,24 @@ object NuvioExoPlayerPerformanceHelper {
     }
 
     /**
+     * Ceiling in MB for the download-ahead held in the Java heap, by physical RAM, or null for no
+     * extra cap. The heap-based [MemoryBudget] tier misses 2 GB boxes whose largeHeap is exactly
+     * 512 MB (SHIELD TV): a 4K remux filled ~140 MB of buffer next to a ~100 MB 4K DV decoder,
+     * the app reached ~650-700 MB and the lowmemorykiller took it down mid-movie.
+     */
+    fun lowRamBufferCapMb(context: Context): Int? {
+        val totalMem = getDevicePhysicalRamBytes(context)
+        val gb = 1024L * 1024L * 1024L
+        return when {
+            totalMem <= 0L -> null
+            totalMem < 1.45 * gb -> 40
+            totalMem < 2.3 * gb -> 64
+            totalMem < 3.2 * gb -> 120
+            else -> null
+        }
+    }
+
+    /**
      * Calculates the warning native target buffer size limit in MB based on RAM tier thresholds.
      */
     fun getWarningNativeMemoryLimitMb(context: Context): Int {

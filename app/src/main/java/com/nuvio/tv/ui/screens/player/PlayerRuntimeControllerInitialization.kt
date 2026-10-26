@@ -515,12 +515,15 @@ internal fun PlayerRuntimeController.initializePlayer(
                 // Managed (default) caps the buffer at the device budget; off uses Target Buffer Size.
                 // Stay full here even on a DV display; first frame tightens only for confirmed DV7.
                 val budgetManaged = playerSettings.bufferBudgetManaged
-                val budgetMbEffective = if (budgetManaged) {
+                val budgetMbRequested = if (budgetManaged) {
                     (MemoryBudget.budgetMb - parallelOverheadMb).coerceAtLeast(MemoryBudget.MIN_BUFFER_MB)
                 } else {
                     (MemoryBudget.effectiveBufferMb(bufferSettings.targetBufferSizeMb) - parallelOverheadMb)
                         .coerceAtLeast(MemoryBudget.MIN_BUFFER_MB)
                 }
+                // The heap tier reads a 512 MB largeHeap as high-RAM, even on a 2 GB box.
+                val lowRamCapMb = NuvioExoPlayerPerformanceHelper.lowRamBufferCapMb(context)
+                val budgetMbEffective = lowRamCapMb?.let { budgetMbRequested.coerceAtMost(it) } ?: budgetMbRequested
                 val budgetBytes = budgetMbEffective.toLong() * 1024L * 1024L
                 // Build with the user's back buffer so seek-back works immediately, except on a heap
                 // bound device, where the load control would hold it for the whole session.
@@ -569,13 +572,17 @@ internal fun PlayerRuntimeController.initializePlayer(
                 // Stock LoadControl: DefaultLoadControl configured with 1.5s back buffer so 1s rewind doesn't clear buffer.
                 effectiveBackBufferDurationMs = 1_500
                 currentBitrateAwareLoadControl = null
+                // Stock sizes the buffer by track type (~140 MB for video + audio). On a 2 GB box that
+                // next to a 4K decoder is past the lowmemorykiller line, so cap it there.
+                val stockCapMb = NuvioExoPlayerPerformanceHelper.lowRamBufferCapMb(context)
                 Log.i(
                     PlayerRuntimeController.TAG,
                     "BUFFER_GATE: engine=exo-stock master=off; DefaultLoadControl " +
-                            "(1.5s back buffer, no VOD cache) host=${url.safeHost()}"
+                            "(1.5s back buffer, no VOD cache, capMb=${stockCapMb ?: "stock"}) host=${url.safeHost()}"
                 )
                 DefaultLoadControl.Builder()
                     .setBackBuffer(1_500, /* retainBackBufferFromKeyframe = */ true)
+                    .apply { stockCapMb?.let { setTargetBufferBytes(it * 1024 * 1024) } }
                     .build()
             }
             _loadControl = loadControl
