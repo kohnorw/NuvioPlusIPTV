@@ -76,6 +76,38 @@ class LiveTvPlaybackController @Inject constructor(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     private var _player: ExoPlayer? = null
+
+    /** Height of the picture last played (2160 = 4K), to switch away from 4K safely. */
+    @Volatile private var lastVideoHeight = 0
+
+    /**
+     * Connections to providers, kept open and reused between video segments (HLS fetches a
+     * new file every few seconds; opening a fresh connection for each one was a common cause of
+     * buffering). Retries a dropped connection once by itself.
+     */
+    private val streamHttp: okhttp3.OkHttpClient by lazy {
+        okhttp3.OkHttpClient.Builder()
+            .dns(com.nuvio.tv.core.network.IPv4FirstDns())
+            .connectTimeout(12, java.util.concurrent.TimeUnit.SECONDS)
+            .readTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
+            .followRedirects(true)
+            .followSslRedirects(true)
+            .retryOnConnectionFailure(true)
+            .connectionPool(okhttp3.ConnectionPool(6, 2, java.util.concurrent.TimeUnit.MINUTES))
+            .apply {
+                com.nuvio.tv.livetv.data.ForgivingTls.trustManager?.let { tm ->
+                    com.nuvio.tv.livetv.data.ForgivingTls.socketFactory?.let { sslSocketFactory(it, tm) }
+                }
+            }
+            .build()
+    }
+
+    /** A slow or failed segment is retried a few times before it counts as an error (and a reconnect). */
+    private val patientLoads = object : androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy(6) {
+        override fun getRetryDelayMsFor(
+            loadErrorInfo: androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy.LoadErrorInfo
+        ): Long = (loadErrorInfo.errorCount * 700L).coerceAtMost(3_000L)
+    }
     val player: ExoPlayer? get() = _player
 
     private val _state = MutableStateFlow(LivePlaybackState())
@@ -616,6 +648,12 @@ class LiveTvPlaybackController @Inject constructor(
             !url.substringBefore('?').endsWith(".m3u8", ignoreCase = true) && startReplayCache(channel, url)
         ) return
         archiveStartPending = catchupTitle != null
+        // Leaving a 4K picture: let go of its decoder before the next channel starts. Handing a
+        // 4K (often HEVC) decoder straight to another stream crashed the app on many TV boxes.
+        if (lastVideoHeight > 1200) {
+            runCatching { p.stop(); p.clearMediaItems() }
+            lastVideoHeight = 0
+        }
         p.setMediaSource(buildMediaSource(url, channel.headers, isLive = catchupTitle == null))
         p.prepare()
         p.playWhenReady = true
@@ -1162,7 +1200,7 @@ class LiveTvPlaybackController @Inject constructor(
             "small" -> listOf(10_000, 30_000, 1_000, 2_000)
             "large" -> listOf(40_000, 90_000, 3_000, 6_000)
             "xlarge" -> listOf(60_000, 150_000, 5_000, 10_000)
-            else -> listOf(25_000, 60_000, 2_000, 4_000)
+            else -> listOf(25_000, 60_000, 2_500, 5_000)
         }
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(minMs, maxMs, startMs, rebufferMs)
@@ -1363,6 +1401,7 @@ class LiveTvPlaybackController @Inject constructor(
         }
 
         override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
+            if (videoSize.height > 0) lastVideoHeight = videoSize.height
             _state.value = _state.value.copy(
                 videoWidth = videoSize.width, videoHeight = videoSize.height,
                 pixelRatio = videoSize.pixelWidthHeightRatio
@@ -1600,18 +1639,16 @@ class LiveTvPlaybackController @Inject constructor(
     private fun buildMediaSource(url: String, headers: Map<String, String>, isLive: Boolean): androidx.media3.exoplayer.source.MediaSource {
         // Protected (DRM) streams, e.g. MPEG-DASH with a ClearKey or Widevine license.
         currentChannel?.drm?.let { drm -> buildDrmMediaSource(url, headers, isLive, drm)?.let { return it } }
-        val http = DefaultHttpDataSource.Factory()
+        val http = androidx.media3.datasource.okhttp.OkHttpDataSource.Factory(streamHttp)
             .setUserAgent(headers["User-Agent"] ?: LiveTvRepository.DEFAULT_UA)
             .setDefaultRequestProperties(headers.filterKeys { it != "User-Agent" })
-            .setAllowCrossProtocolRedirects(true)
-            .setConnectTimeoutMs(15_000)
-            .setReadTimeoutMs(20_000)
         val item = buildMediaItem(url, isLive)
         // Closed captions: TV channels usually carry them inside the video (CEA-608/708) without
         // announcing them, so the player never offered them and Subtitles only showed "Off".
         // Look for them anyway, the way TV apps do.
         if (item.localConfiguration?.mimeType == MimeTypes.APPLICATION_M3U8) {
             return androidx.media3.exoplayer.hls.HlsMediaSource.Factory(http)
+                .setLoadErrorHandlingPolicy(patientLoads)
                 .setExtractorFactory(
                     LiveCaptions.Hls(
                         androidx.media3.exoplayer.hls.DefaultHlsExtractorFactory(
@@ -1629,7 +1666,9 @@ class LiveTvPlaybackController @Inject constructor(
             )
             // CC1–CC4 and the digital (708) captions; the menu only offers those with text.
             .setTsSubtitleFormats(LiveCaptions.formats)
-        return DefaultMediaSourceFactory(http, LiveCaptions.Extractors(extractors)).createMediaSource(item)
+        return DefaultMediaSourceFactory(http, LiveCaptions.Extractors(extractors))
+            .setLoadErrorHandlingPolicy(patientLoads)
+            .createMediaSource(item)
     }
 
     /**
@@ -1735,7 +1774,9 @@ class LiveTvPlaybackController @Inject constructor(
                 "small" -> 10_000L
                 "large" -> 30_000L
                 "xlarge" -> 45_000L
-                else -> null
+                // Normal: 20 s behind live. Many providers recommend only a few seconds, which
+                // left no room for one slow segment.
+                else -> 20_000L
             }
             builder.setLiveConfiguration(
                 MediaItem.LiveConfiguration.Builder()
