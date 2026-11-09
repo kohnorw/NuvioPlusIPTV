@@ -2,7 +2,8 @@ package com.nuvio.tv.updater
 
 enum class UpdateChannel(val storedValue: String) {
     STABLE("stable"),
-    BETA("beta");
+    BETA("beta"),
+    NIGHTLY("nightly");
 
     companion object {
         fun fromStoredValue(value: String?): UpdateChannel? = entries.firstOrNull {
@@ -10,6 +11,10 @@ enum class UpdateChannel(val storedValue: String) {
         }
 
         fun defaultForVersion(versionName: String): UpdateChannel =
-            if (VersionUtils.isPrerelease(versionName)) BETA else STABLE
+            when {
+                versionName.contains("nightly", ignoreCase = true) -> NIGHTLY
+                VersionUtils.isPrerelease(versionName) -> BETA
+                else -> STABLE
+            }
     }
 }

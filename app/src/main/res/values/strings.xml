@@ -426,6 +426,8 @@
     <string name="update_channel_dialog_subtitle">Choose the type of updates you want to receive</string>
     <string name="update_channel_stable_description">Intended for everyday use.</string>
     <string name="update_channel_beta_description">Early updates that may contain bugs, break features, or behave unexpectedly.</string>
+    <string name="update_channel_nightly">Nightly</string>
+    <string name="update_channel_nightly_description">Built automatically from the newest Nuvio beta with Live TV included. Least tested.</string>
     <string name="about_privacy_policy">Privacy Policy</string>
     <string name="about_privacy_policy_subtitle">View our privacy policy</string>
     <string name="support_nuvio_name">Support Nuvio</string>
@@ -776,6 +778,8 @@
     <string name="playback_engine_mvplayer">Libmpv (Beta)</string>
     <string name="playback_auto_switch_internal_player_on_error">Auto-switch engine on startup error</string>
     <string name="playback_auto_switch_internal_player_on_error_sub">If stream startup fails, switch between ExoPlayer and libmpv automatically.</string>
+    <string name="playback_release_decoder_on_background">Release decoder in background</string>
+    <string name="playback_release_decoder_on_background_sub">Free the video decoder when Nuvio goes to the background. Turn on if playback fails with a decoder error after returning to the app. The player reloads on return, also after the screensaver</string>
     <string name="playback_external_forward_subtitles">Forward subtitles to external player</string>
     <string name="playback_external_forward_subtitles_sub">Fetch subtitles in your preferred language from addons and pass them to the external player.</string>
     <string name="playback_external_send_skip_segments">Send intro and outro timestamps</string>
@@ -823,6 +827,17 @@
     <string name="audio_preferred_lang">Preferred Audio Language</string>
     <string name="audio_skip_silence">Skip Silence</string>
     <string name="audio_skip_silence_sub">Skip silent portions of audio during playback</string>
+    <string name="audio_night_mode">Night Mode</string>
+    <string name="audio_night_mode_sub">Lifts dialogue and quiet sounds, so you can keep the volume low</string>
+    <string name="audio_night_mode_desc">Lifts dialogue and quiet sounds; loud scenes stay as they were mixed. Works on audio decoded by the app. Dolby and DTS sent to a receiver or soundbar as passthrough are left as they are.</string>
+    <string name="audio_night_mode_value">Night mode: %1$s</string>
+    <string name="audio_night_mode_off">Off</string>
+    <string name="audio_night_mode_light">Light</string>
+    <string name="audio_night_mode_light_desc">Gentle lift, up to +6 dB</string>
+    <string name="audio_night_mode_medium">Medium</string>
+    <string name="audio_night_mode_medium_desc">Dialogue clearly lifted, up to +10 dB</string>
+    <string name="audio_night_mode_strong">Strong</string>
+    <string name="audio_night_mode_strong_desc">Up to +15 dB, for late-night viewing at low volume</string>
     <string name="audio_remember_delay_per_device">Remember audio delay per device</string>
     <string name="audio_remember_delay_per_device_sub">Save and restore the in-player audio delay for the current audio output route</string>
     <string name="audio_advanced_section">Advanced Audio</string>
@@ -915,13 +930,22 @@
     <string name="sub_hdr_style">Separate HDR / Dolby Vision style</string>
     <string name="sub_hdr_style_sub">Use a different text color and a dimmer brightness for subtitles on HDR and Dolby Vision video</string>
     <string name="sub_hdr_text_color">HDR Text Color</string>
-    <string name="sub_hdr_brightness">HDR Subtitle Brightness</string>
+    <string name="sub_hdr_brightness">HDR Brightness</string>
+    <string name="sub_hdr_dim_player_controls">Dim player controls on HDR</string>
+    <string name="sub_hdr_dim_player_controls_sub">Apply the HDR brightness to the player controls and menus shown over HDR and Dolby Vision video</string>
     <string name="sub_advanced_section">Advanced Subtitle Rendering</string>
     <string name="sub_libass">Use libass for ASS/SSA subtitles</string>
     <string name="sub_libass_sub">Advanced ASS/SSA rendering (styles, positioning, animations)</string>
     <string name="sub_libass_mode">Libass Render Mode</string>
     <string name="sub_libass_render_scale">Subtitle Render Resolution</string>
     <string name="sub_libass_render_scale_sub">Lower resolution improves performance on heavy typesetting at the cost of sharpness</string>
+    <string name="sub_libass_render_mode">ASS Render Mode</string>
+    <string name="sub_libass_render_mode_sub">How ASS/SSA subtitles are drawn onto the video</string>
+    <string name="sub_libass_render_mode_tunneled_sub">Tunneled playback bypasses the video effects pipeline. Overlay is used automatically.</string>
+    <string name="sub_libass_render_mode_video_effect">Video Effect</string>
+    <string name="sub_libass_render_mode_video_effect_sub">Draws subtitles directly onto each video frame. Frame-accurate timing on all hardware. HDR content is tone-mapped to SDR.</string>
+    <string name="sub_libass_render_mode_overlay">Overlay</string>
+    <string name="sub_libass_render_mode_overlay_sub">Renders subtitles on a separate surface layer. Preserves HDR output. Subtitle timing may not be perfectly accurate on some devices.</string>
     <string name="sub_org_none">None (default order)</string>
     <string name="sub_org_by_lang">By language</string>
     <string name="sub_org_by_addon">By addon</string>
@@ -1189,6 +1213,8 @@
     <!-- Custom Poster Web Page -->
     <string name="layout_always_show_landscape_clearlogo">Always Backdrop with Logo for Landscape Posters</string>
     <string name="layout_always_show_landscape_clearlogo_sub">Ignore landscape poster from addon and use backdrop with clearlogo overlay instead.</string>
+    <string name="layout_hero_description_auto_scroll">Auto-scroll Descriptions</string>
+    <string name="layout_hero_description_auto_scroll_sub">Slowly scroll long descriptions on the Home screen instead of cutting them off.</string>
     <string name="web_custom_poster_title">Custom Poster Source</string>
     <string name="web_custom_poster_subtitle">Paste a poster URL pattern below and press Save.</string>
     <string name="web_custom_poster_label">URL Pattern</string>
@@ -1857,7 +1883,6 @@
     <string name="parental_severity_mild">Mild</string>
     <string name="player_ends_at">Ends at %1$s</string>
     <string name="player_live_watched">LIVE  %1$s</string>
-    <string name="player_via">via %1$s</string>
     <!-- Season/episode code shown in player UI (e.g. S01E02). %1$d = season, %2$d = episode. -->
     <string name="season_episode_format">S%1$d E%2$d</string>
     <string name="player_subtitle_delay">Subtitles Delay</string>
@@ -1946,6 +1971,12 @@
     <string name="audio_center_mix_unavailable">Center mix is only available when FFmpeg downmix is active.</string>
     <string name="audio_maintain_original_audio_on_downmix_title">Maintain original audio on downmix</string>
     <string name="audio_maintain_original_audio_on_downmix_subtitle">When disabled, downmix normalization can reduce overall volume.</string>
+    <string name="audio_downmix_lfe_level">LFE level on downmix</string>
+    <string name="audio_downmix_lfe_level_sub">Mixes the subwoofer (LFE) channel into the other speakers instead of dropping it. Only for layouts without LFE, such as 2.0.</string>
+    <string name="audio_downmix_lfe_level_desc">Used when the downmix layout has no LFE channel. Applies from the next playback.</string>
+    <string name="audio_downmix_lfe_level_off">Off</string>
+    <string name="audio_downmix_lfe_level_half">50%</string>
+    <string name="audio_downmix_lfe_level_full">100%</string>
 
     <string name="subtitle_dialog_title">Subtitles</string>
     <string name="subtitle_no_builtin">No built-in subtitles available</string>
@@ -2558,6 +2589,12 @@
     <string name="cd_remove">Remove</string>
     <string name="cd_preview">Preview</string>
     <string name="cd_test">Test</string>
+    <string name="cd_enable_scraper">Enable %1$s</string>
+    <string name="cd_enable_addon">Enable %1$s</string>
+    <string name="cd_color_swatch">Colour %1$s</string>
+    <string name="cd_emoji_option">Emoji %1$s</string>
+    <string name="cd_trailer_controls">Trailer controls</string>
+    <string name="cd_seek_bar">Seek bar</string>
     <string name="cd_unlink">Unlink</string>
     <string name="cd_nuvio_logo">NuvioTV</string>
     <string name="cd_trakt_logo">Trakt Logo</string>
@@ -3396,9 +3433,7 @@
     <string name="autosync_tolerance_value">%1$d ms</string>
     <string name="autosync_thorough_title">Thorough Auto Sync Search</string>
     <string name="autosync_thorough_description">Keep comparing other subtitles and embedded tracks for a closer match before syncing. When off, the first strong match is used sooner. Only confident matches are ever applied.</string>
-    <string name="autosync_toast_failed">Sync failed: Auto Sync couldn\'t match this subtitle to the video.</string>
-    <string name="autosync_toast_failed_no_reference">Sync failed: this video has no embedded subtitles to compare with.</string>
-    <string name="autosync_toast_failed_unsupported">Sync failed: Auto Sync doesn\'t support this subtitle format.</string>
+    <string name="autosync_toast_no_fit">Sync failed: these subtitles don\'t match this version of the video.</string>
     <string name="autosync_label_synced">Auto synced</string>
     <string name="stream_resume_from_time">Resume from %1$s</string>
     <string name="stream_resume_from_percent">Resume from %1$d%%</string>

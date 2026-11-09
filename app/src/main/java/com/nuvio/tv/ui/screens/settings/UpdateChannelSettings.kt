@@ -32,6 +32,7 @@ internal fun UpdateChannelSettings(
     val channelName = when (state.updateChannel) {
         UpdateChannel.STABLE -> stringResource(R.string.update_channel_stable)
         UpdateChannel.BETA -> stringResource(R.string.update_channel_beta)
+        UpdateChannel.NIGHTLY -> stringResource(R.string.update_channel_nightly)
     }
 
     SettingsActionRow(
@@ -98,6 +99,11 @@ internal fun UpdateChannelSettings(
                     value = UpdateChannel.BETA,
                     title = stringResource(R.string.update_channel_beta),
                     description = stringResource(R.string.update_channel_beta_description)
+                ),
+                SettingsPickerOption(
+                    value = UpdateChannel.NIGHTLY,
+                    title = stringResource(R.string.update_channel_nightly),
+                    description = stringResource(R.string.update_channel_nightly_description)
                 )
             ),
             selectedValue = state.updateChannel,
@@ -107,7 +113,7 @@ internal fun UpdateChannelSettings(
             },
             onDismiss = { showChannelDialog = false },
             width = 500.dp,
-            maxHeight = 320.dp
+            maxHeight = 440.dp
         )
     }
 }

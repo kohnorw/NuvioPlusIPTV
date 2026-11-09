@@ -234,6 +234,10 @@ public class MatroskaExtractor implements Extractor {
 
   private static final String TAG = "MatroskaExtractor";
 
+  // Encoders repeat the alternative transfer SEI on random access points, so a few leading
+  // samples cover streams whose first sample doesn't carry it.
+  private static final int MAX_HEVC_ALTERNATIVE_TRANSFER_SAMPLES = 8;
+
   private static final int UNSET_ENTRY_ID = -1;
 
   private static final int BLOCK_STATE_START = 0;
@@ -622,6 +626,12 @@ public class MatroskaExtractor implements Extractor {
   private boolean seekForSeekHead;
   private int followedSeekHeadCount;
   private long seekPositionAfterBuildingCues = C.INDEX_UNSET;
+  // Tracks placed after the Clusters (the SeekHead points at them): read them before any Cluster.
+  private long tracksContentPosition = C.INDEX_UNSET;
+  private boolean seekForTracks;
+  private boolean seekedForTracks;
+  private boolean returnFromTracks;
+  private long seekPositionAfterReadingTracks = C.INDEX_UNSET;
   private long clusterTimecodeUs = C.TIME_UNSET;
 
   // Reading state.
@@ -1050,6 +1060,18 @@ public class MatroskaExtractor implements Extractor {
         }
         break;
       case ID_CLUSTER:
+        if (seekPositionAfterReadingTracks != C.INDEX_UNSET) {
+          // The SeekHead's Tracks position led to a Cluster instead; go back and carry on.
+          returnFromTracks = true;
+          break;
+        }
+        if (shouldSeekForTracksBeforeCluster(
+            tracks.size(), tracksContentPosition, contentPosition, seekedForTracks)) {
+          // Tracks come after the Clusters. Read them first, or the Cues step below would end
+          // tracks with none and the player would never start.
+          seekForTracks = true;
+          break;
+        }
         if (!sentSeekMap) {
           // We need to build cues before parsing the cluster.
           if (seekForCuesEnabled && cuesContentPosition != C.INDEX_UNSET) {
@@ -1120,6 +1142,8 @@ public class MatroskaExtractor implements Extractor {
         }
         if (seekEntryId == ID_CUES) {
           cuesContentPosition = seekEntryPosition;
+        } else if (seekEntryId == ID_TRACKS) {
+          tracksContentPosition = seekEntryPosition;
         } else if (seekEntryId == ID_SEEK_HEAD) {
           pendingSeekHeadPosition =
               nextNestedSeekHeadPosition(
@@ -1273,6 +1297,9 @@ public class MatroskaExtractor implements Extractor {
         // selector. Publishing here would lock the selector to the provisional audio/dts
         // mime and force a late passthrough reconfiguration.
         pendingFinishTracks = true;
+        if (seekPositionAfterReadingTracks != C.INDEX_UNSET) {
+          returnFromTracks = true;
+        }
         break;
       default:
         break;
@@ -2113,6 +2140,18 @@ public class MatroskaExtractor implements Extractor {
       maybeEndTracks();
     }
 
+    if (track.isHevc
+        && track.hevcAlternativeTransferSamplesToCheck > 0
+        && !track.requiresDolbyVisionTransform
+        && !sampleEncodingHandled
+        && sampleBytesRead == 0
+        && zlibSampleSource == null
+        && !track.hasContentEncryption
+        && track.sampleStrippedBytes == null) {
+      track.hevcAlternativeTransferSamplesToCheck--;
+      maybeApplyHevcAlternativeTransfer(input, track, size);
+    }
+
     TrackOutput output = track.output;
     if (!sampleEncodingHandled) {
       if (track.hasContentEncryption) {
@@ -2340,6 +2379,34 @@ public class MatroskaExtractor implements Extractor {
     }
 
     return finishWriteSampleData();
+  }
+
+  /**
+   * Applies the HDR transfer from an HEVC alternative transfer SEI when the container and VUI
+   * declare none, so the decoder and display get HLG for streams that signal it only there.
+   */
+  private void maybeApplyHevcAlternativeTransfer(ExtractorInput input, Track track, int size)
+      throws IOException {
+    Format format = checkNotNull(track.format);
+    if (HevcAlternativeTransferSei.declaresHdrTransfer(format)) {
+      track.hevcAlternativeTransferSamplesToCheck = 0;
+      return;
+    }
+    int preferredTransfer =
+        HevcAlternativeTransferSei.peekPreferredTransfer(
+            input, size, track.nalUnitLengthFieldLength);
+    if (preferredTransfer == Format.NO_VALUE) {
+      return;
+    }
+    track.hevcAlternativeTransferSamplesToCheck = 0;
+    @C.ColorTransfer
+    int colorTransfer = ColorInfo.isoTransferCharacteristicsToColorTransfer(preferredTransfer);
+    if (!HevcAlternativeTransferSei.isHdrTransfer(colorTransfer)) {
+      return;
+    }
+    track.format = HevcAlternativeTransferSei.withColorTransfer(format, colorTransfer);
+    checkNotNull(track.output).format(track.format);
+    Log.i(TAG, "HEVC alternative transfer SEI: preferred transfer " + preferredTransfer);
   }
 
   private int writeLengthDelimitedSampleAsAnnexB(
@@ -2611,6 +2678,19 @@ public class MatroskaExtractor implements Extractor {
    * @return Whether the seek position was updated.
    */
   private boolean maybeSeekForCues(PositionHolder seekPosition, long currentPosition) {
+    if (seekForTracks) {
+      seekForTracks = false;
+      seekedForTracks = true;
+      seekPositionAfterReadingTracks = currentPosition;
+      seekPosition.position = tracksContentPosition;
+      return true;
+    }
+    if (returnFromTracks) {
+      returnFromTracks = false;
+      seekPosition.position = seekPositionAfterReadingTracks;
+      seekPositionAfterReadingTracks = C.INDEX_UNSET;
+      return true;
+    }
     if (seekForSeekHead) {
       long target = pendingSeekHeadPosition;
       pendingSeekHeadPosition = C.INDEX_UNSET;
@@ -2647,6 +2727,18 @@ public class MatroskaExtractor implements Extractor {
       return true;
     }
     return false;
+  }
+
+  /**
+   * Whether to jump to a Tracks element the SeekHead placed after this Cluster before parsing it.
+   * Only once, and only when no tracks are known yet.
+   */
+  static boolean shouldSeekForTracksBeforeCluster(
+      int trackCount, long tracksContentPosition, long clusterContentPosition, boolean alreadySought) {
+    return trackCount == 0
+        && !alreadySought
+        && tracksContentPosition != C.INDEX_UNSET
+        && tracksContentPosition > clusterContentPosition;
   }
 
   private void maybeFollowPendingIndexAfterSeekHead() {
@@ -3095,6 +3187,8 @@ public class MatroskaExtractor implements Extractor {
     public int nalUnitLengthFieldLength;
     public boolean requiresDolbyVisionTransform;
     public boolean isHevc;
+    // Leading HEVC samples still to scan for an alternative transfer SEI.
+    public int hevcAlternativeTransferSamplesToCheck = MAX_HEVC_ALTERNATIVE_TRANSFER_SAMPLES;
 
     /** Builds the {@link Format} for the track. */
     @RequiresNonNull("codecId")

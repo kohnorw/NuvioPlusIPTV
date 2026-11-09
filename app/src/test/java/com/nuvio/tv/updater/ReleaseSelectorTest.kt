@@ -60,6 +60,28 @@ class ReleaseSelectorTest {
         assertEquals(listOf("1.1.0"), selected.map { it.tagName })
     }
 
+    @Test
+    fun `nightly builds only reach the nightly channel`() {
+        val releases = listOf(
+            release("1.1.0-beta.13.nightly.2", prerelease = true),
+            release("1.1.0-beta.13.1", prerelease = true),
+            release("1.0.1")
+        )
+
+        assertEquals(
+            listOf("1.0.1"),
+            ReleaseSelector.eligibleReleases(releases, UpdateChannel.STABLE).map { it.tagName }
+        )
+        assertEquals(
+            listOf("1.1.0-beta.13.1", "1.0.1"),
+            ReleaseSelector.eligibleReleases(releases, UpdateChannel.BETA).map { it.tagName }
+        )
+        assertEquals(
+            listOf("1.1.0-beta.13.nightly.2", "1.1.0-beta.13.1", "1.0.1"),
+            ReleaseSelector.eligibleReleases(releases, UpdateChannel.NIGHTLY).map { it.tagName }
+        )
+    }
+
     private fun release(
         tag: String,
         name: String = tag,

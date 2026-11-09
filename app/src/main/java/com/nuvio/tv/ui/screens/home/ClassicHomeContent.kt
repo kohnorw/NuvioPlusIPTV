@@ -101,6 +101,7 @@ fun ClassicHomeContent(
     onNavigateToCatalogSeeAll: (String, String, String) -> Unit,
     onNavigateToFolderDetail: (String, String) -> Unit = { _, _ -> },
     onRemoveContinueWatching: (String, Int?, Int?, Boolean) -> Unit,
+    onMarkContinueWatchingWatched: (ContinueWatchingItem) -> Unit = {},
     isCatalogItemWatched: (MetaPreview) -> Boolean = { false },
     onCatalogItemLongPress: (MetaPreview, String) -> Unit = { _, _ -> },
     onRequestTrailerPreview: (MetaPreview) -> Unit,
@@ -605,6 +606,7 @@ fun ClassicHomeContent(
                     showImdbRatings = uiState.homeImdbRatingsVisibility.showRatings,
                     mdbListShowOnHero = uiState.mdbListShowOnHero,
                     mdbListRatingOrder = uiState.mdbListRatingOrder,
+                    descriptionAutoScrollEnabled = uiState.heroDescriptionAutoScrollEnabled,
                     onActiveItemChanged = { item ->
                         activeHeroItem = item
                         val idx = uiState.heroItems.indexOfFirst { it.id == item.id }
@@ -667,6 +669,7 @@ fun ClassicHomeContent(
                             ""
                         )
                     },
+                    onMarkWatched = onMarkContinueWatchingWatched,
                     onRemoveItem = { item ->
                         val contentId = when (item) {
                             is ContinueWatchingItem.InProgress -> item.progress.contentId
@@ -759,6 +762,7 @@ fun ClassicHomeContent(
                             ""
                         )
                     },
+                    onMarkWatched = onMarkContinueWatchingWatched,
                     onRemoveItem = { item ->
                         val contentId = when (item) {
                             is ContinueWatchingItem.InProgress -> item.progress.contentId
