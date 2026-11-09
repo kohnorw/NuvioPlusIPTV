@@ -10,7 +10,6 @@ import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.preferencesDataStore
-import com.nuvio.tv.BuildConfig
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -35,6 +34,7 @@ class UpdatePreferences @Inject constructor(
     private val lastCheckAtKey = longPreferencesKey("last_check_at_ms")
     private val updateBannerEnabledKey = booleanPreferencesKey("update_banner_enabled")
     private val updateChannelKey = stringPreferencesKey("update_channel")
+    private val stableDefaultAppliedKey = booleanPreferencesKey("stable_default_applied")
     private val autoInstallEnabledKey = booleanPreferencesKey("auto_install_enabled")
     private val downloadedTagKey = stringPreferencesKey("downloaded_release_tag")
     private val downloadedApkPathKey = stringPreferencesKey("downloaded_apk_path")
@@ -54,8 +54,11 @@ class UpdatePreferences @Inject constructor(
     }
 
     val updateChannel: Flow<UpdateChannel> = dataStore.data.map { prefs ->
-        UpdateChannel.fromStoredValue(prefs[updateChannelKey])
-            ?: UpdateChannel.defaultForVersion(BuildConfig.VERSION_NAME)
+        if (prefs[stableDefaultAppliedKey] == true) {
+            UpdateChannel.fromStoredValue(prefs[updateChannelKey]) ?: UpdateChannel.STABLE
+        } else {
+            UpdateChannel.STABLE
+        }
     }
 
     val autoInstallEnabled: Flow<Boolean> = dataStore.data.map { prefs ->
@@ -78,12 +81,17 @@ class UpdatePreferences @Inject constructor(
         prefs[autoInstallNoticeEnabledKey] ?: true
     }
 
+    /** Everyone moves to Stable once, with this update; after that their choice is kept. */
     suspend fun getOrInitializeUpdateChannel(): UpdateChannel {
-        val defaultChannel = UpdateChannel.defaultForVersion(BuildConfig.VERSION_NAME)
-        var resolvedChannel = defaultChannel
+        var resolvedChannel = UpdateChannel.STABLE
         dataStore.edit { prefs ->
-            resolvedChannel = UpdateChannel.fromStoredValue(prefs[updateChannelKey])
-                ?: defaultChannel
+            if (prefs[stableDefaultAppliedKey] == true) {
+                resolvedChannel = UpdateChannel.fromStoredValue(prefs[updateChannelKey])
+                    ?: UpdateChannel.STABLE
+            } else {
+                prefs[stableDefaultAppliedKey] = true
+                prefs.remove(ignoredTagKey)
+            }
             prefs[updateChannelKey] = resolvedChannel.storedValue
         }
         return resolvedChannel
@@ -139,6 +147,7 @@ class UpdatePreferences @Inject constructor(
 
     suspend fun setUpdateChannel(channel: UpdateChannel) {
         dataStore.edit { prefs ->
+            prefs[stableDefaultAppliedKey] = true
             prefs[updateChannelKey] = channel.storedValue
             prefs.remove(ignoredTagKey)
         }

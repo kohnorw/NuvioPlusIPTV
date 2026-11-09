@@ -22,19 +22,10 @@ internal object ReleaseSelector {
                 prerelease = isPrerelease(release, version)
             )
         }
-        .filter { candidate ->
-            when (channel) {
-                UpdateChannel.STABLE -> !candidate.prerelease
-                UpdateChannel.BETA -> !isNightly(candidate.release)
-                UpdateChannel.NIGHTLY -> true
-            }
-        }
+        .filter { candidate -> channel == UpdateChannel.BETA || !candidate.prerelease }
         .sortedByDescending(ReleaseCandidate::version)
         .map(ReleaseCandidate::release)
         .toList()
-
-    private fun isNightly(release: GitHubReleaseDto): Boolean =
-        release.tagName.orEmpty().contains("nightly", ignoreCase = true)
 
     private fun releaseVersion(release: GitHubReleaseDto): SemanticVersion? =
         VersionUtils.parse(release.tagName) ?: VersionUtils.parse(release.name)
@@ -43,7 +34,7 @@ internal object ReleaseSelector {
         release: GitHubReleaseDto,
         version: SemanticVersion
     ): Boolean = release.prerelease ||
-        version.prerelease.isNotEmpty() ||
+        (version.prerelease.isNotEmpty() && !version.isForkStable) ||
         prereleaseNamePattern.containsMatchIn(release.name.orEmpty())
 
     private data class ReleaseCandidate(

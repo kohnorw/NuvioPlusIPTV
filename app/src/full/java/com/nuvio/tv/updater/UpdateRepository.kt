@@ -27,7 +27,7 @@ class UpdateRepository @Inject constructor(
                     }
                     listOf(response.body() ?: error("Empty GitHub release response"))
                 }
-                UpdateChannel.BETA, UpdateChannel.NIGHTLY -> {
+                UpdateChannel.BETA -> {
                     val response = gitHubReleaseApi.getReleases(owner = owner, repo = repo)
                     if (!response.isSuccessful) {
                         error("GitHub API error: ${response.code()}")

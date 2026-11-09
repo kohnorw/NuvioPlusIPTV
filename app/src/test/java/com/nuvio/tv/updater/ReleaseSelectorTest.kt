@@ -61,24 +61,20 @@ class ReleaseSelectorTest {
     }
 
     @Test
-    fun `nightly builds only reach the nightly channel`() {
+    fun `fork stable builds reach stable and sort below real prereleases`() {
         val releases = listOf(
-            release("1.1.0-beta.13.nightly.2", prerelease = true),
-            release("1.1.0-beta.13.1", prerelease = true),
-            release("1.0.1")
+            release("1.1.1-beta.1", prerelease = true),
+            release("1.1.1-stable.2"),
+            release("1.1.0-beta.13.1", prerelease = true)
         )
 
         assertEquals(
-            listOf("1.0.1"),
+            listOf("1.1.1-stable.2"),
             ReleaseSelector.eligibleReleases(releases, UpdateChannel.STABLE).map { it.tagName }
         )
         assertEquals(
-            listOf("1.1.0-beta.13.1", "1.0.1"),
+            listOf("1.1.1-beta.1", "1.1.1-stable.2", "1.1.0-beta.13.1"),
             ReleaseSelector.eligibleReleases(releases, UpdateChannel.BETA).map { it.tagName }
-        )
-        assertEquals(
-            listOf("1.1.0-beta.13.nightly.2", "1.1.0-beta.13.1", "1.0.1"),
-            ReleaseSelector.eligibleReleases(releases, UpdateChannel.NIGHTLY).map { it.tagName }
         )
     }
 

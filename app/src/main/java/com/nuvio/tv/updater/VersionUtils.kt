@@ -6,6 +6,9 @@ internal data class SemanticVersion(
     val patch: Long,
     val prerelease: List<String>
 ) : Comparable<SemanticVersion> {
+    /** A fork build of a stable Nuvio release: Nuvio 1.1.0 ships as 1.1.1-stable.N. */
+    val isForkStable: Boolean get() = prerelease.firstOrNull() == FORK_STABLE
+
     override fun compareTo(other: SemanticVersion): Int {
         compareValues(major, other.major).takeIf { it != 0 }?.let { return it }
         compareValues(minor, other.minor).takeIf { it != 0 }?.let { return it }
@@ -26,6 +29,11 @@ internal data class SemanticVersion(
     }
 
     private fun comparePrereleaseIdentifier(left: String, right: String): Int {
+        // Fork stable builds come before any real prerelease of that version, so
+        // 1.1.1-beta.1 still reaches Beta users who are on 1.1.1-stable.N.
+        if (left == FORK_STABLE && right != FORK_STABLE) return -1
+        if (right == FORK_STABLE && left != FORK_STABLE) return 1
+
         val leftNumeric = left.all(Char::isDigit)
         val rightNumeric = right.all(Char::isDigit)
 
@@ -42,6 +50,8 @@ internal data class SemanticVersion(
         return left.compareTo(right)
     }
 }
+
+private const val FORK_STABLE = "stable"
 
 internal object VersionUtils {
     private val versionPattern = Regex(
@@ -68,7 +78,8 @@ internal object VersionUtils {
         )
     }
 
-    fun isPrerelease(raw: String?): Boolean = parse(raw)?.prerelease?.isNotEmpty() == true
+    fun isPrerelease(raw: String?): Boolean =
+        parse(raw)?.let { it.prerelease.isNotEmpty() && !it.isForkStable } == true
 
     fun isRemoteNewer(remote: String?, local: String?): Boolean {
         val remoteVersion = parse(remote) ?: return false

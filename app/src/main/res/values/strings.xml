@@ -426,8 +426,6 @@
     <string name="update_channel_dialog_subtitle">Choose the type of updates you want to receive</string>
     <string name="update_channel_stable_description">Intended for everyday use.</string>
     <string name="update_channel_beta_description">Early updates that may contain bugs, break features, or behave unexpectedly.</string>
-    <string name="update_channel_nightly">Nightly</string>
-    <string name="update_channel_nightly_description">Built automatically from the newest Nuvio beta with Live TV included. Least tested.</string>
     <string name="about_privacy_policy">Privacy Policy</string>
     <string name="about_privacy_policy_subtitle">View our privacy policy</string>
     <string name="support_nuvio_name">Support Nuvio</string>
