@@ -163,7 +163,9 @@ jobs:
       # It lives on its own "downloader" release, whose file is replaced each time. That release
       # has no version number, so the in-app updater ignores it, and in-app updates keep
       # working exactly as before.
-      - name: Update the Downloader link (always the newest version)
+      # Stable releases only, so the Downloader code never installs a beta.
+      - name: Update the Downloader link (newest Stable version)
+        if: contains(steps.version.outputs.version, '-stable.')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
