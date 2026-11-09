@@ -5,6 +5,9 @@ name: Release Nuvio + IPTV update
 # automatically so the app's built-in updater offers it:
 #   Nuvio 1.1.0-beta.2  ->  1.1.0-beta.2.1, 1.1.0-beta.2.2, ...
 #   Nuvio 1.2.0         ->  1.2.1-stable.1, 1.2.1-stable.2, ... (Stable channel)
+#   Nuvio 1.2.0, run from the beta branch -> 1.2.1-beta.0.N (Beta channel): your beta
+#     hotfixes between Nuvio betas. The app ranks these above every 1.2.1-stable.N and
+#     below Nuvio's own betas (1.2.1-beta.1 and up), so both still reach Beta users.
 # The next real Nuvio release always counts as newer than these.
 on:
   workflow_dispatch:
@@ -34,16 +37,29 @@ jobs:
           BASE=$(grep -m1 -E '^\s*versionName = "' app/build.gradle.kts | sed -E 's/.*"(.*)".*/\1/')
           if [ -z "$BASE" ]; then echo "Couldn't read versionName from app/build.gradle.kts" >&2; exit 1; fi
           if [ "$GITHUB_REF_NAME" = stable ] && [[ "$BASE" == *-* ]]; then echo "::error::The stable branch is on a Nuvio beta ($BASE)"; exit 1; fi
-          if [ "$GITHUB_REF_NAME" = beta ] && [[ "$BASE" != *-* ]]; then echo "::error::No Nuvio beta on the beta branch yet ($BASE). Release from stable, or wait for the next Nuvio beta."; exit 1; fi
+          # last_n PREFIX: the highest build number already released under PREFIX (empty if none).
+          last_n() {
+            gh release list -R "$GITHUB_REPOSITORY" --limit 200 --json tagName -q '.[].tagName' \
+              | grep -F "$1" | sed "s/^$(printf '%s' "$1" | sed 's/[.[\*^$/]/\\&/g')//" \
+              | grep -E '^[0-9]+$' | sort -n | tail -1 || true
+          }
           if [[ "$BASE" == *-* ]]; then
             PREFIX="$BASE."
+            LAST=$(last_n "$PREFIX")
           else
             IFS=. read -r MA MI PA <<< "$BASE"
-            PREFIX="$MA.$MI.$((PA + 1))-stable."
+            STABLE_PREFIX="$MA.$MI.$((PA + 1))-stable."
+            if [ "$GITHUB_REF_NAME" = beta ]; then
+              # Beta hotfixes on a stable Nuvio. The build number carries on from the stable
+              # builds too, so Android's version code keeps going up for Beta users.
+              PREFIX="$MA.$MI.$((PA + 1))-beta.0."
+              A=$(last_n "$PREFIX"); B=$(last_n "$STABLE_PREFIX")
+              LAST=$(( ${A:-0} > ${B:-0} ? ${A:-0} : ${B:-0} ))
+            else
+              PREFIX="$STABLE_PREFIX"
+              LAST=$(last_n "$PREFIX")
+            fi
           fi
-          LAST=$(gh release list -R "$GITHUB_REPOSITORY" --limit 200 --json tagName -q '.[].tagName' \
-            | grep -F "$PREFIX" | sed "s/^$(printf '%s' "$PREFIX" | sed 's/[.[\*^$/]/\\&/g')//" \
-            | grep -E '^[0-9]+$' | sort -n | tail -1 || true)
           N=$(( ${LAST:-0} + 1 ))
           if [ "$N" -gt 99 ]; then echo "Too many fork builds on one Nuvio version (max 99)" >&2; exit 1; fi
           VERSION="$PREFIX$N"
