@@ -415,7 +415,11 @@ fun OnDemandHomeScreen(
                     },
                     onFocusedRowKeyChanged = {},
                     scrollToTopTrigger = 0,
-                    onRequestLazyCatalogLoad = {}
+                    onRequestLazyCatalogLoad = {},
+                    // Nuvio's folder preview enrichment doesn't apply to On Demand rows.
+                    enrichingItemId = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<String?>(null) },
+                    enrichedPreviews = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<Map<String, com.nuvio.tv.domain.model.MetaPreview>>(emptyMap()) },
+                    failedEnrichmentIds = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<Set<String>>(emptySet()) }
                 )
             }
         }
