@@ -80,10 +80,14 @@ jobs:
 
           merge_tag stable "$STABLE_TAG"
           if [ "$MERGED" = true ]; then release stable "$STABLE_TAG"; fi
-          # Beta always contains the newest stable, then takes any newer beta.
+          # Beta always contains the newest stable, then takes any newer beta. Beta is released
+          # whenever it took something new, so Beta users never drop back to a stable build
+          # without the beta's own changes.
           merge_tag beta "$STABLE_TAG"
+          BETA_CHANGED=$MERGED; BETA_BASE=$STABLE_TAG
           NEWEST=$(printf '%s\n' "$STABLE_TAG-zzz" "$BETA_TAG" | sort -V | tail -1)
           if [ "$NEWEST" = "$BETA_TAG" ]; then
             merge_tag beta "$BETA_TAG"
-            if [ "$MERGED" = true ]; then release beta "$BETA_TAG"; fi
+            if [ "$MERGED" = true ]; then BETA_CHANGED=true; BETA_BASE=$BETA_TAG; fi
           fi
+          if [ "$BETA_CHANGED" = true ]; then release beta "$BETA_BASE"; fi
