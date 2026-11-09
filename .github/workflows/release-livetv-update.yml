@@ -33,6 +33,8 @@ jobs:
         run: |
           BASE=$(grep -m1 -E '^\s*versionName = "' app/build.gradle.kts | sed -E 's/.*"(.*)".*/\1/')
           if [ -z "$BASE" ]; then echo "Couldn't read versionName from app/build.gradle.kts" >&2; exit 1; fi
+          if [ "$GITHUB_REF_NAME" = stable ] && [[ "$BASE" == *-* ]]; then echo "::error::The stable branch is on a Nuvio beta ($BASE)"; exit 1; fi
+          if [ "$GITHUB_REF_NAME" = beta ] && [[ "$BASE" != *-* ]]; then echo "::error::No Nuvio beta on the beta branch yet ($BASE). Release from stable, or wait for the next Nuvio beta."; exit 1; fi
           if [[ "$BASE" == *-* ]]; then
             PREFIX="$BASE."
           else
