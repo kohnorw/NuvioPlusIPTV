@@ -104,6 +104,7 @@ class LiveTvRepository @Inject constructor(
     fun ensureLoaded(updateCheckDelayMs: Long = 0L) {
         if (initialized) return
         initialized = true
+        watchNuvioPlayer()
         scope.launch {
             // Saved channels and guide first: reading them only uses the device's storage.
             loadFromCache()
@@ -912,6 +913,68 @@ class LiveTvRepository @Inject constructor(
     @Volatile private var loadedFrom = Long.MAX_VALUE
     @Volatile private var loadedTo = Long.MIN_VALUE
     @Volatile private var guideInDb = false
+
+    // ------------------------------------------------- memory while Nuvio's player is open
+
+    /**
+     * About 2 GB of memory (SHIELD TV 2019, sticks): the same line the player's own buffer cap
+     * uses. There, every channel's listings took 80 MB and more of the app's memory, and next to
+     * a 4K decoder that was enough for Android's memory cleaner to close Nuvio mid-episode.
+     */
+    private val lowMemoryDevice: Boolean by lazy {
+        runCatching {
+            val am = context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+            val info = android.app.ActivityManager.MemoryInfo().also { am.getMemoryInfo(it) }
+            info.totalMem in 1 until LOW_MEMORY_BYTES
+        }.getOrDefault(false)
+    }
+
+    /** The listings were let go for Nuvio's player: nothing is read back until it closes. */
+    @Volatile private var guideHeldBack = false
+    private var guideWatchStarted = false
+    private var guideReturnJob: kotlinx.coroutines.Job? = null
+
+    /**
+     * On a low-memory box: while Nuvio's player is open, the listings in memory are let go (they
+     * stay in the guide database), and a little after it closes the hours around now are read
+     * back, so Live TV is ready again. Live TV's own player isn't Nuvio's player and isn't affected.
+     */
+    private fun watchNuvioPlayer() {
+        if (guideWatchStarted || !lowMemoryDevice) return
+        guideWatchStarted = true
+        scope.launch {
+            BackgroundWork.nuvioPlaying.collect { playing ->
+                guideReturnJob?.cancel()
+                if (playing) {
+                    letGoOfGuide()
+                } else if (guideHeldBack) {
+                    guideHeldBack = false
+                    guideReturnJob = scope.launch {
+                        // Back-to-back episodes: don't read it all back between them.
+                        delay(GUIDE_RETURN_DELAY_MS)
+                        if (BackgroundWork.nuvioPlaying.value || !guideInDb || loadedFrom != Long.MAX_VALUE) return@launch
+                        val (from, to) = defaultWindow()
+                        ensureRange(from, to)
+                    }
+                }
+            }
+        }
+    }
+
+    private suspend fun letGoOfGuide() {
+        guideHeldBack = true
+        rangeMutex.withLock {
+            // Only listings the guide database can give back. A guide that lives only in memory
+            // (no database yet) is kept: there'd be nothing to read it back from.
+            if (!guideInDb || _programs.value.isEmpty()) return@withLock
+            _programs.value = emptyMap()
+            fullRangeChannels.clear()
+            loadedFrom = Long.MAX_VALUE
+            loadedTo = Long.MIN_VALUE
+            _guideGeneration.value++
+            LIVE_REPORT.add("Guide listings let go while Nuvio's player is open (low-memory device)")
+        }
+    }
     /** The stored guide turned out to have no listings around now: match the guides again. */
     @Volatile private var storedGuideEmpty = false
     private val rangeMutex = Mutex()
@@ -933,12 +996,13 @@ class LiveTvRepository @Inject constructor(
 
     /** Loads these channels' listings straight away if they aren't loaded yet (the group you open). */
     fun loadChannelsNow(keys: List<String>) {
-        if (!guideInDb || keys.isEmpty()) return
+        if (!guideInDb || guideHeldBack || keys.isEmpty()) return
         scope.launch(Dispatchers.IO) {
             val missing = keys.distinct().filter { it !in _programs.value }
             if (missing.isEmpty()) return@launch
             val got = runCatching { guideDb.range(loadedFrom, loadedTo, light = true, channels = missing) }.getOrNull() ?: return@launch
             rangeMutex.withLock {
+                if (guideHeldBack) return@withLock
                 val cur = _programs.value
                 _programs.value = cur + got.filterKeys { it !in cur }
             }
@@ -951,11 +1015,11 @@ class LiveTvRepository @Inject constructor(
         if (list.isEmpty()) return
         scope.launch(Dispatchers.IO) {
             runCatching { priorityFile.writeText(list.joinToString("\n")) }
-            if (!guideInDb) return@launch
+            if (!guideInDb || guideHeldBack) return@launch
             val missing = list.filter { it !in _programs.value }
             if (missing.isEmpty()) return@launch
             val got = runCatching { guideDb.range(loadedFrom, loadedTo, light = true, channels = missing) }.getOrNull() ?: return@launch
-            rangeMutex.withLock { _programs.value = _programs.value + got }
+            rangeMutex.withLock { if (!guideHeldBack) _programs.value = _programs.value + got }
         }
     }
 
@@ -1002,10 +1066,16 @@ class LiveTvRepository @Inject constructor(
         rangeBusy.set(true)
         scope.launch(Dispatchers.IO) {
           try {
+            // On a 2 GB box this read is what filled the memory next to a 4K video: not while
+            // Nuvio's player is open.
+            if (lowMemoryDevice) BackgroundWork.awaitIdle()
             val t0 = System.currentTimeMillis()
             val (fullFrom, fullTo) = defaultWindow()
             val rest = runCatching { guideDb.range(fullFrom, fullTo, light = true) }.getOrNull()
+            // The player opened during the read: let it go (it's read again when Live TV asks).
+            if (guideHeldBack) return@launch
             if (rest != null) rangeMutex.withLock {
+                if (guideHeldBack) return@withLock
                 val merged = HashMap<String, List<EpgProgram>>(rest)
                 _programs.value.forEach { (k, v) -> if ((merged[k]?.size ?: 0) < v.size) merged[k] = v }
                 _programs.value = merged
@@ -1048,6 +1118,7 @@ class LiveTvRepository @Inject constructor(
     @Volatile private var pendingRange: Pair<Long, Long>? = null
 
     fun ensureRange(fromMs: Long, toMs: Long) {
+        if (guideHeldBack) return
         dropOldHours(fromMs)
         if (!guideInDb || (fromMs >= loadedFrom && toMs <= loadedTo)) return
         if (!rangeBusy.compareAndSet(false, true)) {
@@ -1078,7 +1149,7 @@ class LiveTvRepository @Inject constructor(
                 runCatching { guideDb.range(f, t, light = lightPrograms) }.getOrNull() ?: return@launch
             }
             rangeMutex.withLock {
-                if (fromMs >= loadedFrom && toMs <= loadedTo) return@withLock
+                if (guideHeldBack || (fromMs >= loadedFrom && toMs <= loadedTo)) return@withLock
                 val merged = HashMap(_programs.value)
                 reads.forEach { got ->
                     got.forEach { (ch, list) ->
@@ -2507,6 +2578,8 @@ class LiveTvRepository @Inject constructor(
         private const val MAX_FULL_RANGE_CHANNELS = 400
         // Hours read ahead of what's asked for (each read only adds the hours not loaded yet).
         private const val RANGE_SLACK_MS = 6 * HOUR
+        private const val LOW_MEMORY_BYTES = 2_300L * 1024L * 1024L
+        private const val GUIDE_RETURN_DELAY_MS = 20_000L
         // 2: guides compared by how far ahead they go (matched again once after updating).
         private const val GUIDE_CACHE_VERSION = 2
         private const val CHANNELS_CACHE_VERSION = 6
