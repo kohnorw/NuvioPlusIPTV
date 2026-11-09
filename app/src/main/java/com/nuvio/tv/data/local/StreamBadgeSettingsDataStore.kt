@@ -9,6 +9,7 @@ import com.nuvio.tv.core.streams.StreamBadgeGroup
 import com.nuvio.tv.core.streams.StreamBadgeImport
 import com.nuvio.tv.core.streams.StreamBadgePlacement
 import com.nuvio.tv.core.streams.StreamBadgeRules
+import com.nuvio.tv.core.streams.StreamBadgeRulesParser
 import com.nuvio.tv.core.streams.StreamBadgeSettings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -20,6 +21,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.shareIn
+import kotlinx.coroutines.launch
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
@@ -43,6 +45,14 @@ class StreamBadgeSettingsDataStore @Inject constructor(
     companion object {
         const val FEATURE = "stream_badge_settings"
         private const val LEGACY_DEBRID_FEATURE = "debrid_settings"
+
+        /**
+         * The badge pack a profile starts with (Nard's slim Fusion badges). Fetched once, the
+         * first time a profile with no badge URLs opens; after that it's an ordinary import the
+         * profile can switch off or remove in Settings, and it never comes back on its own.
+         */
+        const val DEFAULT_BADGE_URL =
+            "https://raw.githubusercontent.com/vowl313/NardBadges/refs/heads/main/NardBadges_Slim.json"
     }
 
     private fun store(profileId: Int = profileManager.activeProfileId.value) =
@@ -58,13 +68,14 @@ class StreamBadgeSettingsDataStore @Inject constructor(
     private val showInPlayerKey = booleanPreferencesKey("show_badges_in_player")
     private val playerBadgeSourceKey = stringPreferencesKey("player_badge_source")
     private val legacyDebridStreamBadgeRulesKey = stringPreferencesKey("debrid_stream_badge_rules")
+    private val defaultBadgesOfferedKey = booleanPreferencesKey("default_badges_offered")
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     // Shared so the badge rules JSON is decoded once per change, not on every
     // read: the stream screens read these settings for each batch of streams.
     val settings: Flow<StreamBadgeSettings> = profileManager.activeProfileId.flatMapLatest { pid ->
-        factory.get(pid, FEATURE).data.onStart { migrateProfile(pid) }
+        factory.get(pid, FEATURE).data.onStart { migrateProfile(pid); addDefaultBadges(pid) }
     }.map { prefs ->
         StreamBadgeSettings(
             rules = parseStreamBadgeRules(prefs[streamBadgeRulesKey]) ?: StreamBadgeRules(),
@@ -120,6 +131,46 @@ class StreamBadgeSettingsDataStore @Inject constructor(
             it[streamBadgePlacementKey] = settings.badgePlacement.name
             it[showInPlayerKey] = settings.showInPlayer
             it[playerBadgeSourceKey] = settings.playerBadgeSource
+        }
+    }
+
+    /**
+     * Gives a profile that has no badge URLs the default pack, once. Runs in the background so
+     * the stream list never waits on the download; if it fails (offline), it's tried again the
+     * next time the app opens. A profile that already has badges, or had the default once,
+     * is left alone.
+     */
+    private suspend fun addDefaultBadges(profileId: Int) {
+        val prefs = store(profileId).data.first()
+        if (prefs[defaultBadgesOfferedKey] == true) return
+        if (prefs[streamBadgeRulesKey] != null) {
+            store(profileId).edit { it[defaultBadgesOfferedKey] = true }
+            return
+        }
+        scope.launch {
+            val import = runCatching {
+                StreamBadgeRulesParser.parse(sourceUrl = DEFAULT_BADGE_URL, payload = fetchDefaultBadges())
+            }.getOrNull() ?: return@launch
+            store(profileId).edit {
+                // Badges set up in the meantime (a sync, or by hand) win.
+                if (it[streamBadgeRulesKey] == null) {
+                    val rules = StreamBadgeRules().upsert(import, activate = true)
+                    if (rules.hasImport) it[streamBadgeRulesKey] = json.encodeToString(rules)
+                }
+                it[defaultBadgesOfferedKey] = true
+            }
+        }
+    }
+
+    private fun fetchDefaultBadges(): String {
+        val connection = java.net.URL(DEFAULT_BADGE_URL).openConnection() as java.net.HttpURLConnection
+        connection.connectTimeout = 10_000
+        connection.readTimeout = 15_000
+        return try {
+            check(connection.responseCode in 200..299) { "Default badges: HTTP ${connection.responseCode}" }
+            connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+        } finally {
+            connection.disconnect()
         }
     }
 
