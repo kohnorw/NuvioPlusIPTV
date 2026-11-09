@@ -59,7 +59,7 @@ jobs:
           # Only this fork's workflows stay, even if Nuvio adds new ones.
           for f in .github/workflows/*; do
             case "$(basename "$f")" in
-              sync-nuvio.yml|release-livetv-update.yml|livetv-build.yml|connect-drive.yml) ;;
+              sync-nuvio.yml|release-livetv-update.yml|livetv-build.yml) ;;
               *) git rm -q "$f" ;;
             esac
           done
