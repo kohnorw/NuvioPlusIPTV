@@ -5,7 +5,7 @@ name: Sync Nuvio releases
 # stops the run and lists the files. Needs the SYNC_TOKEN secret (classic, "repo" and "workflow").
 on:
   schedule:
-    - cron: "37 */6 * * *"
+    - cron: "37 9 * * *"
   workflow_dispatch:
 
 permissions:
