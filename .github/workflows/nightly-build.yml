@@ -48,11 +48,24 @@ jobs:
             echo "Already on Nuvio $TAG."
           else
             if ! git merge --no-edit -m "Merge Nuvio $TAG" refs/remotes/upstream/release; then
-              echo "::error::Nuvio $TAG conflicts with the Live TV changes in:"
-              git diff --name-only --diff-filter=U | sed 's/^/::error::  /'
-              git merge --abort
-              exit 1
+              # Nuvio edited a workflow this fork removed: keep it removed.
+              git status --porcelain | sed -n 's#^DU \(\.github/workflows/.*\)#\1#p' | while read -r f; do git rm -q "$f"; done
+              if [ -n "$(git diff --name-only --diff-filter=U)" ]; then
+                echo "::error::Nuvio $TAG conflicts with the Live TV changes in:"
+                git diff --name-only --diff-filter=U | sed 's/^/::error::  /'
+                git merge --abort
+                exit 1
+              fi
+              git commit --no-edit
             fi
+            # Only this fork's workflows stay, even if Nuvio adds new ones.
+            for f in .github/workflows/*; do
+              case "$(basename "$f")" in
+                nightly-build.yml|release-livetv-update.yml|livetv-build.yml|connect-drive.yml) ;;
+                *) git rm -q "$f" ;;
+              esac
+            done
+            git diff --cached --quiet || git commit -m "Remove workflows this fork doesn't use"
             git push origin HEAD:dev
           fi
 
