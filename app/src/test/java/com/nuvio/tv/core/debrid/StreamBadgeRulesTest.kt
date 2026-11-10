@@ -175,6 +175,40 @@ class StreamBadgeRulesTest {
         assertEquals(listOf("Dolby Vision", "Atmos"), badges.map { it.name })
     }
 
+    @Test
+    fun `addon name alone does not add a resolution badge the stream contradicts`() {
+        val stream = Stream(
+            name = "[TB] Meteor 1080p (Web T1)",
+            title = null,
+            description = "Abbott Elementary S06 E05 WEB-DL AVC DD+ 5.1",
+            url = "https://example.com/episode.mkv",
+            ytId = null,
+            infoHash = null,
+            fileIdx = null,
+            externalUrl = null,
+            behaviorHints = null,
+            addonName = "AIOStreams 4K",
+            addonLogo = null
+        )
+        val rules = StreamBadgeRules(
+            imports = listOf(
+                StreamBadgeImport(
+                    sourceUrl = "https://example.com/badges.json",
+                    filters = listOf(
+                        StreamBadgeFilter(name = "4K", pattern = "(?i)^(?=.*(?:2160[pi]?|4k|uhd))(?!.*(?:1080[pi]?|720[pi]?))"),
+                        StreamBadgeFilter(name = "FHD", pattern = "(?i)\\b1080[pi]?\\b|\\bfhd\\b"),
+                        StreamBadgeFilter(name = "AIO", pattern = "AIOStreams")
+                    )
+                )
+            )
+        )
+
+        val badges = StreamBadgeMatcher.matchedBadges(stream, StreamBadgeMatcher.compile(rules))
+
+        // No 4K; patterns that are about the addon still match through the combined text.
+        assertEquals(listOf("FHD", "AIO"), badges.map { it.name })
+    }
+
     private fun badgeImport(
         sourceUrl: String,
         active: Boolean,

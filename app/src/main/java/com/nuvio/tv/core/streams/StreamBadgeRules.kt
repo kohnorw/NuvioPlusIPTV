@@ -424,17 +424,22 @@ internal object StreamBadgeMatcher {
             parsed?.audio?.joinToString(" "),
             parsed?.channels?.joinToString(" "),
             parsed?.hdr?.joinToString(" "),
-            parsed?.group,
-            stream.addonName
+            parsed?.group
         )
             .map { it.replace(WHITESPACE_PATTERN, " ").trim() }
             .filter { it.isNotBlank() }
             .distinct()
 
-        return if (candidates.size <= 1) {
-            candidates
-        } else {
-            candidates + candidates.joinToString(" ")
+        // The addon's name describes the addon, not this stream ("AIOStreams 4K" lists 1080p
+        // streams too). On its own it passed patterns like "4K and not 1080p", so a 1080p
+        // stream got a 4K badge. It's only matched as part of everything together, where the
+        // stream's own "1080p" is seen as well.
+        val addon = stream.addonName?.replace(WHITESPACE_PATTERN, " ")?.trim()?.takeIf { it.isNotBlank() }
+        val combined = (candidates + listOfNotNull(addon)).joinToString(" ")
+        return when {
+            combined.isEmpty() -> emptyList()
+            candidates.size == 1 && addon == null -> candidates
+            else -> candidates + combined
         }
     }
 }
