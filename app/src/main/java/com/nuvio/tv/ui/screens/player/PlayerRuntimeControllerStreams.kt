@@ -1007,6 +1007,7 @@ internal fun PlayerRuntimeController.switchToSourceStream(
     val playbackUrl = currentStreamUrl
     val playbackHeaders = currentHeaders
     persistSelectedStreamForReuse(stream = stream, url = playbackUrl, headers = playbackHeaders)
+    persistStreamRouteState(stream, isTorrent = false)
 
     // Reset stream-state error flags for the new stream.
     hasRetriedCurrentStreamAfter416 = false
@@ -1176,6 +1177,7 @@ private fun PlayerRuntimeController.switchToTorrentSourceStream(
     resetPostPlayOverlayState(clearEpisode = false)
     launchTorrentSourceStream(stream, infoHash, loadSavedProgress = true)
     persistTorrentStreamForReuse(stream)
+    persistStreamRouteState(stream, isTorrent = true)
 }
 
 private fun PlayerRuntimeController.switchToTorrentEpisodeStream(
@@ -1192,6 +1194,7 @@ private fun PlayerRuntimeController.switchToTorrentEpisodeStream(
     switchToEpisodeStreamCommon(stream, forcedTargetVideo, showSourceIndicator = !isAutoPlay)
     launchTorrentSourceStream(stream, infoHash, loadSavedProgress = true)
     persistTorrentStreamForReuse(stream)
+    persistStreamRouteState(stream, isTorrent = true)
 }
 
 internal fun PlayerRuntimeController.loadEpisodesIfNeeded() {
@@ -1713,6 +1716,7 @@ internal fun PlayerRuntimeController.switchToEpisodeStream(
     currentSeason = targetVideo?.season ?: _uiState.value.episodeStreamsSeason ?: currentSeason
     currentEpisode = targetVideo?.episode ?: _uiState.value.episodeStreamsEpisode ?: currentEpisode
     currentEpisodeTitle = targetVideo?.title ?: _uiState.value.episodeStreamsTitle ?: currentEpisodeTitle
+    persistStreamRouteState(stream, isTorrent = false)
     // Until the new file loads, MPV keeps reporting the old one, which is often at its end.
     hasRenderedFirstFrame = false
     mpvView?.markMediaRequested(playbackUrl)
