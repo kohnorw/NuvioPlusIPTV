@@ -2,7 +2,9 @@ name: Sync Nuvio releases
 
 # Merges each new Nuvio stable release into the stable branch and each new beta into the beta
 # branch, keeping the IPTV code, then runs "Release Nuvio + IPTV update" from that branch. A merge conflict
-# stops the run and lists the files. Needs the SYNC_TOKEN secret (classic, "repo" and "workflow").
+# stops the run and lists the files: merge that Nuvio tag into the branch by hand, push it, and the
+# next run releases it (a Nuvio version on a branch with no release built from it yet is released).
+# Needs the SYNC_TOKEN secret (classic, "repo" and "workflow").
 on:
   schedule:
     - cron: "37 9 * * *"
@@ -48,7 +50,14 @@ jobs:
           git fetch --no-tags upstream "+refs/tags/$tag:refs/remotes/upstream/release"
           git checkout -q -B "$branch" "origin/$branch"
           if git merge-base --is-ancestor refs/remotes/upstream/release HEAD; then
-            echo "$branch already has Nuvio $tag."
+            # A merge done by hand (after a conflict) still needs its release: release unless a
+            # fork release on this branch already includes this Nuvio version.
+            if [ -n "$(git tag -l '[0-9]*' --contains refs/remotes/upstream/release --merged HEAD)" ]; then
+              echo "$branch already has Nuvio $tag."
+            else
+              echo "$branch has Nuvio $tag but no release built from it yet."
+              MERGED=true
+            fi
             return 0
           fi
           if ! git merge --no-edit -m "Merge Nuvio $tag" refs/remotes/upstream/release; then
@@ -57,6 +66,7 @@ jobs:
             if [ -n "$(git diff --name-only --diff-filter=U)" ]; then
               echo "::error::Nuvio $tag conflicts with the Live TV changes in:"
               git diff --name-only --diff-filter=U | sed 's/^/::error::  /'
+              echo "::error::Merge Nuvio's $tag tag into $branch by hand and push it; the next run releases it."
               git merge --abort
               exit 1
             fi
