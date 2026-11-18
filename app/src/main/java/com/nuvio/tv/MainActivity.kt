@@ -50,6 +50,7 @@ import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material.icons.filled.FiberManualRecord
@@ -1175,6 +1176,8 @@ open class MainActivity : ComponentActivity() {
                             // first, like every other page), even while its catalog is being
                             // checked or updated; only its menu entry depends on having content.
                             add(Screen.OnDemand.route)
+                            // Live TV fork: the Calendar (your Library's new episodes and releases).
+                            add(Screen.Calendar.route)
                             add(Screen.Search.route)
                             add(Screen.Library.route)
                             add(Screen.Settings.route)
@@ -1239,6 +1242,7 @@ open class MainActivity : ComponentActivity() {
                                 if (onDemandInSidebar) {
                                     add(DrawerItem(route = Screen.OnDemand.route, label = "On Demand", icon = Icons.Default.VideoLibrary))
                                 }
+                                add(DrawerItem(route = Screen.Calendar.route, label = "Calendar", icon = Icons.Default.DateRange))
                             }
                             liveTvPages.forEachIndexed { i, page -> add(if (i == 0) page.copy(sectionStart = true) else page) }
                             add(
