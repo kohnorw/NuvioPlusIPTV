@@ -1416,6 +1416,23 @@ private fun PlaybackNavHost(
             )
         }
 
+        composable(Screen.Calendar.route) {
+            // Live TV fork: new episodes and release dates of this profile's Library.
+            com.nuvio.tv.livetv.calendar.CalendarScreen(
+                onOpenDetail = { id, type, addonBaseUrl, season, episode ->
+                    navController.navigate(
+                        Screen.Detail.createRoute(
+                            itemId = id,
+                            itemType = type,
+                            addonBaseUrl = addonBaseUrl,
+                            returnFocusSeason = season,
+                            returnFocusEpisode = episode
+                        )
+                    )
+                }
+            )
+        }
+
         composable(Screen.OnDemand.route) {
             // Live TV fork: On Demand in Nuvio's own home layout (Classic, Grid or Modern, as set
             // for Home), with every layout option taken from Home itself.
