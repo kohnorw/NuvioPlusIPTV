@@ -229,7 +229,6 @@ internal fun LiveTvPlayerPanel(
                 if (full) timeline?.let {
                     LiveText(it.status, size = 13.sp, color = if (it.statusLive) colors.Error else accent, modifier = Modifier.padding(end = 14.dp))
                 }
-                LiveText(clock, size = 18.sp, weight = FontWeight.Bold, color = colors.TextPrimary)
             }
             Spacer(Modifier.height(6.dp))
             Row(verticalAlignment = Alignment.Bottom) {
@@ -247,15 +246,6 @@ internal fun LiveTvPlayerPanel(
                         LiveText(desc ?: " ", size = 14.sp, color = colors.TextSecondary, maxLines = if (full && !withRecent) 4 else 1, shadow = true)
                     }
                 }
-                // What's on next, on the right.
-                if (nextTitle != null) {
-                    Spacer(Modifier.width(24.dp))
-                    Column(horizontalAlignment = Alignment.End) {
-                        LiveText("NEXT", size = 11.sp, weight = FontWeight.Bold, color = colors.TextTertiary)
-                        LiveText(nextTitle, size = 15.sp, weight = FontWeight.Bold, color = colors.TextPrimary, modifier = Modifier.widthIn(max = 260.dp), shadow = true)
-                        nextTime?.let { LiveText(it, size = 13.sp, color = colors.TextSecondary) }
-                    }
-                }
             }
             timeline?.let { t ->
                 Spacer(Modifier.height(if (full) 10.dp else 10.dp))
@@ -271,6 +261,8 @@ internal fun LiveTvPlayerPanel(
                 }
             }
         }
+        // ---- right: the clock and what's next
+        UpNextColumn(clock, nextTitle.takeIf { mode == PanelMode.LIVE }, nextTime, Modifier.align(Alignment.CenterVertically))
     }
     if (withRecent) {
         Spacer(Modifier.height(12.dp))
@@ -656,10 +648,9 @@ private fun FullInfoPanel(
                             modifier = Modifier.padding(end = 12.dp)
                         )
                     }
-                    if (clock.isNotEmpty()) LiveText(clock, size = 16.sp, weight = FontWeight.Bold, color = colors.TextPrimary, shadow = true)
                 }
                 Spacer(Modifier.height(2.dp))
-                // Title · category, and what's next on the right.
+                // Title · category.
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     LiveText(
                         title, size = 22.sp, weight = FontWeight.ExtraBold, maxLines = 1, marquee = true,
@@ -669,16 +660,6 @@ private fun FullInfoPanel(
                     if (meta.isNotBlank()) {
                         Spacer(Modifier.width(10.dp))
                         LiveText(meta, size = 12.sp, color = colors.TextSecondary, maxLines = 1, modifier = Modifier.weight(1f, fill = false), shadow = true)
-                    }
-                    Spacer(Modifier.weight(0.001f))
-                    if (nextTitle != null) {
-                        Spacer(Modifier.width(16.dp))
-                        LiveText("Next: ", size = 12.sp, color = colors.TextSecondary, shadow = true)
-                        LiveText(nextTitle, size = 12.sp, weight = FontWeight.Bold, color = colors.TextPrimary, modifier = Modifier.widthIn(max = 220.dp), shadow = true)
-                        nextTime?.let {
-                            Spacer(Modifier.width(6.dp))
-                            LiveText(it.substringBefore(" –"), size = 12.sp, color = colors.TextSecondary, shadow = true)
-                        }
                     }
                 }
                 // The description: only without the channel row (the row takes its place).
@@ -713,10 +694,40 @@ private fun FullInfoPanel(
                     }
                 }
             }
+            // ---- right: the clock and what's next
+            UpNextColumn(clock, nextTitle.takeIf { mode == PanelMode.LIVE }, nextTime, Modifier.align(Alignment.CenterVertically))
         }
         if (withRow) {
             Spacer(Modifier.height(8.dp))
             RecentRow(recent.orEmpty(), recentFocus, recentTitle, recentClear)
+        }
+    }
+}
+
+/**
+ * The right end of the bar: the clock, and under it what's on next ("UP NEXT · 7:00 PM" over the
+ * show's name), behind a thin divider. Only what's there is shown; with neither, nothing is.
+ */
+@Composable
+private fun UpNextColumn(clock: String, nextTitle: String?, nextTime: String?, modifier: Modifier = Modifier) {
+    val colors = NuvioTheme.colors
+    val showClock = clock.isNotEmpty()
+    val showNext = !nextTitle.isNullOrBlank()
+    if (!showClock && !showNext) return
+    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+        Spacer(Modifier.width(14.dp))
+        Box(Modifier.width(1.dp).height(60.dp).background(Color.White.copy(alpha = 0.10f)))
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.widthIn(min = 70.dp, max = if (showNext) 190.dp else 110.dp)) {
+            if (showClock) LiveText(clock, size = 19.sp, weight = FontWeight.ExtraBold, color = colors.TextPrimary, shadow = true)
+            if (showNext) {
+                if (showClock) Spacer(Modifier.height(4.dp))
+                LiveText(
+                    "UP NEXT" + (nextTime?.let { " · " + it.substringBefore(" –") } ?: ""),
+                    size = 10.sp, weight = FontWeight.Bold, color = colors.TextTertiary, shadow = true
+                )
+                LiveText(nextTitle!!, size = 13.sp, weight = FontWeight.Bold, color = colors.TextPrimary, maxLines = 2, shadow = true)
+            }
         }
     }
 }
