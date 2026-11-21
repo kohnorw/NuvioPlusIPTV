@@ -11,6 +11,8 @@ import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.source.TrackGroupArray
 import androidx.media3.exoplayer.trackselection.ExoTrackSelection
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.lang.reflect.Proxy
 
@@ -95,5 +97,46 @@ class BitrateAwareLoadControlTest {
         lc.setBudgetBytesOverride(shrunkBudget.toLong())
 
         assertEquals(shrunkBudget, calcTotalMethod.invoke(lc) as Int)
+    }
+
+    @Test
+    fun `stops loading at the byte budget even before min buffer time and starts playback there`() {
+        val budget = 1024 * 1024
+        val lc = BitrateAwareLoadControl(
+            minBufferMs = 15_000,
+            maxBufferMs = 50_000,
+            bufferForPlaybackMs = 2_500,
+            bufferForPlaybackAfterRebufferMs = 5_000,
+            prioritizeTimeOverSizeThresholds = true,
+            backBufferDurationMs = 0,
+            retainBackBufferFromKeyframe = true,
+            budgetBytes = budget.toLong()
+        )
+        val playerId = PlayerId.UNSET
+        lc.onPrepared(playerId)
+        fun params(bufferedUs: Long) = LoadControl.Parameters(
+            playerId,
+            androidx.media3.common.Timeline.EMPTY,
+            MediaSource.MediaPeriodId(Any()),
+            /* playbackPositionUs= */ 0L,
+            bufferedUs,
+            /* playbackSpeed= */ 1f,
+            /* playWhenReady= */ true,
+            /* rebuffering= */ false,
+            /* targetLiveOffsetUs= */ C.TIME_UNSET,
+            /* lastRebufferRealtimeMs= */ C.TIME_UNSET
+        )
+        lc.onTracksSelected(params(0L), TrackGroupArray.EMPTY, emptyArray<ExoTrackSelection?>())
+
+        // Half a second buffered, under budget: keeps loading, too little to start.
+        assertTrue(lc.shouldContinueLoading(params(500_000L)))
+        assertFalse(lc.shouldStartPlayback(params(500_000L)))
+
+        // Fill the allocator to the budget (a very high bitrate stream).
+        val allocator = lc.allocator
+        repeat(budget / allocator.individualAllocationLength) { allocator.allocate() }
+
+        assertFalse(lc.shouldContinueLoading(params(500_000L)))
+        assertTrue(lc.shouldStartPlayback(params(500_000L)))
     }
 }

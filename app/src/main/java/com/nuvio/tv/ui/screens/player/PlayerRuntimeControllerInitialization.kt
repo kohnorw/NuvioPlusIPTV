@@ -539,7 +539,10 @@ internal fun PlayerRuntimeController.initializePlayer(
                 val budgetMbRequested = if (budgetManaged) {
                     (MemoryBudget.budgetMb - parallelOverheadMb).coerceAtLeast(MemoryBudget.MIN_BUFFER_MB)
                 } else {
-                    (MemoryBudget.effectiveBufferMb(bufferSettings.targetBufferSizeMb) - parallelOverheadMb)
+                    // This engine buffers on the Java heap, so a manual Target Buffer Size (up to
+                    // 4 GB) can't go past the heap budget without the app running out of memory.
+                    (MemoryBudget.effectiveBufferMb(bufferSettings.targetBufferSizeMb)
+                        .coerceAtMost(MemoryBudget.budgetMb) - parallelOverheadMb)
                         .coerceAtLeast(MemoryBudget.MIN_BUFFER_MB)
                 }
                 // The heap tier reads a 512 MB largeHeap as high-RAM, even on a 2 GB box.
