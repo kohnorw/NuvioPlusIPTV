@@ -3,6 +3,7 @@ package com.nuvio.tv.core.player
 import androidx.media3.common.C
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultLoadControl
+import androidx.media3.exoplayer.LoadControl
 import androidx.media3.exoplayer.analytics.PlayerId
 import androidx.media3.exoplayer.trackselection.ExoTrackSelection
 import androidx.media3.exoplayer.upstream.Allocator
@@ -66,12 +67,39 @@ class BitrateAwareLoadControl(
         return if (override >= 0L) override else super.getBackBufferDurationUs(playerId)
     }
 
+    /**
+     * The byte budget is a hard ceiling. With prioritizeTimeOverSizeThresholds the stock control
+     * keeps loading past the byte target until Min Buffer Duration is buffered: on a 4K remux
+     * (~100 Mbps) that's hundreds of MB on the Java heap, and the app ran out of memory and closed.
+     */
+    override fun shouldContinueLoading(parameters: LoadControl.Parameters): Boolean {
+        if (isAtMemoryCeiling()) return false
+        return super.shouldContinueLoading(parameters)
+    }
+
+    /**
+     * At the ceiling with less than the start threshold buffered (a bitrate too high for the
+     * budget to hold that many seconds), play what's buffered instead of waiting for data that
+     * can't fit. This is what prioritizeTimeOverSizeThresholds was there to prevent.
+     */
+    override fun shouldStartPlayback(parameters: LoadControl.Parameters): Boolean {
+        if (super.shouldStartPlayback(parameters)) return true
+        return parameters.bufferedDurationUs > 0L && isAtMemoryCeiling()
+    }
+
+    private fun isAtMemoryCeiling(): Boolean =
+        allocator.totalBytesAllocated >= currentTargetBufferBytes()
+
     override fun calculateTargetBufferBytes(
         trackSelectionArray: Array<out ExoTrackSelection?>
     ): Int {
         // Target = the memory budget. Time (Max Buffer Duration) is the real limit; this is
         // just the memory cap. Sizing from advertised bitrate starved variable-bitrate peaks,
         // so let high-bitrate fill up to the budget and low-bitrate stop at the time limit.
+        return currentTargetBufferBytes()
+    }
+
+    private fun currentTargetBufferBytes(): Int {
         val effectiveBudget = if (budgetBytesOverride >= 0L) budgetBytesOverride else budgetBytes
         return effectiveBudget.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
     }
