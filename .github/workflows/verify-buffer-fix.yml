@@ -1,0 +1,16 @@
+name: Verify buffer fix (temporary)
+on:
+  push:
+    branches: [claude/verify-buffer-fix-stable]
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+      - run: touch keys.properties local.properties
+      - run: ./gradlew --no-daemon :app:testFullDebugUnitTest --tests 'com.nuvio.tv.ui.screens.settings.MemoryBudget*' && ./gradlew --no-daemon :app:compileFullReleaseKotlin
